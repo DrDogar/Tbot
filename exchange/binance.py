@@ -2,6 +2,9 @@ import ccxt
 
 exchange = ccxt.binance()
 
-def get_bitcoin_price():
-    ticker = exchange.fetch_ticker("BTC/USDT")
+
+def get_live_price(symbol):
+
+    ticker = exchange.fetch_ticker(symbol)
+
     return ticker["last"]
