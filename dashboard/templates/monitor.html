@@ -65,6 +65,11 @@
     background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
   }
   header.top h1 { font-size: 18px; margin: 0; font-weight: 700; }
+  .version-tag {
+    font-size: 11px; font-weight: 600; color: var(--text-muted); background: var(--page-plane);
+    border: 1px solid var(--border); border-radius: 6px; padding: 1px 6px; margin-left: 6px;
+    vertical-align: middle; font-variant-numeric: tabular-nums;
+  }
   .status-pill {
     display: inline-flex; align-items: center; gap: 6px;
     font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px;
@@ -146,7 +151,7 @@
 <div class="viz-root">
   <div class="wrap">
     <header class="top">
-      <h1>TBOT Live Monitor</h1>
+      <h1>TBOT Live Monitor <span class="version-tag">v{{ app_version }}</span></h1>
       <span id="status-pill" class="status-pill status-off"><span class="dot"></span><span id="status-text">Loading…</span></span>
       <div class="meta-row">
         <span>Run <b id="run-id">—</b></span>

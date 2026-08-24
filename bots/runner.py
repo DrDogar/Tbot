@@ -21,6 +21,7 @@ from bots.trend_ai_model import (
     build_long_training_dataset,
 )
 from config.settings import (
+    APP_VERSION,
     NEURAL_TRAINING_LOOKBACK_DAYS,
     NEURAL_TRAINING_TIMEFRAME,
     SESSION_DURATION_HOURS,
@@ -196,6 +197,7 @@ def _run_training_with_retry(max_attempts=3, backoff_seconds=30):
 
 
 def run_bot_arena():
+    logger.info("TBOT Arena v%s starting", APP_VERSION)
     now = datetime.now(timezone.utc)
 
     run_state = load_run_state(RUN_STATE_PATH)

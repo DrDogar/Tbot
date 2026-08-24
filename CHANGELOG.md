@@ -1,101 +1,136 @@
 # Changelog
 
-All notable changes to TBOT, in order. Each entry maps to a git commit (hash noted)
-so you can `git show <hash>` for the full diff.
+All notable changes to TBOT are documented here.
 
-**Push policy**: changes are committed locally as they're made, but NOT pushed to
-GitHub until explicitly requested. Entries under **[Unreleased]** exist locally only.
+Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning
+follows [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PATCH`):
+- **MAJOR** — a fundamental architecture change.
+- **MINOR** — a bot added/removed, or a new capability, in a backward-compatible way.
+- **PATCH** — bug fixes, reliability fixes, docs/tooling.
 
----
+The current running version is tracked in `config/settings.py` (`APP_VERSION`) and
+shown in the arena/monitor dashboard headers and the arena's startup log line.
+Released versions are tagged in git (`git tag -l`).
 
-## [Unreleased] — local commits not yet pushed to GitHub
-
-- `0fea1ba` — **Hide the arena/monitor console windows too.** Task Scheduler was
-  launching `python.exe` directly for both tasks, which pops a visible console
-  window (same root cause as the earlier watchdog fix). Both now launch through
-  `scripts/run_hidden.vbs` (hidden `wscript.exe` wrapper, waits and passes the
-  exit code through so restart-on-failure still works) — same proven pattern
-  already used for `TBOT-Watchdog`.
-- `89e9884` — Added this changelog.
+**Push policy**: commits happen locally as changes are made; nothing is pushed to
+GitHub until explicitly requested. Everything under **[Unreleased]** exists only
+on this machine.
 
 ---
 
-## v5.3 — 2026-08-25 — `1a0cb5b`
-**Trim arena to 5 bots**
-- Retired Momentum Rider (+9.6%) and Weekly Trend Follower (+6.8%) — cut by choice
-  to focus the roster, not for losing money.
-- Liquidated both bots' open positions at live market price before removal.
-- Updated README to match (roster, results table, retired-bots note).
+## [Unreleased]
 
-## v5.2 — 2026-08-25 — `3866391`
-**Retire losers, add Patient Trend AI, fix watchdog popup**
-- Retired Scalper and Aggressive Multi-Vote — the only two bots never clearly
-  profitable after ~3 weeks live. Positions liquidated first.
-- Added **Patient Trend AI**: a 4th from-scratch NumPy MLP bot, trained on a
-  2-day-ahead target (vs. a few hours for the other AI bots) plus an extra 30-day
-  macro "regime" feature. No take-profit cap, 3% trailing stop instead of a tight
-  one — built to sit out chop/down-drift and only commit on a real sustained trend.
-  First attempt collapsed to always predicting HOLD (training accuracy exactly
-  matched the majority-class baseline); fixed by tuning the label horizon/threshold
-  and increasing model capacity, verified against real data across all 5 coins
-  before going live.
-- Fixed the watchdog task flashing a visible console window every 5 minutes — it
-  now runs via a hidden `wscript.exe` wrapper. Consolidated its registration into
-  one script (`register_watchdog_task.ps1`) so `start_detached.ps1` couldn't
-  clobber the fix with its own stale copy again (it briefly did, mid-session).
-- Updated README to match.
+### Fixed
+- Arena and monitor Task Scheduler entries were launching `python.exe` directly,
+  which pops a visible console window. Both now launch through a hidden
+  `wscript.exe` wrapper (`scripts/run_hidden.vbs`), same fix already applied to
+  the watchdog task. (`0fea1ba`)
 
-## v5.1 — 2026-08-24 — `0db533b`
-**Add README**
-- Full documentation: what the project is, quick start, every bot explained,
-  the training pipeline, risk management, the reliability/self-healing design,
-  the web dashboard, a file-by-file breakdown of every tracked file, and a
-  results snapshot (8-bot roster at the time).
+### Added
+- This changelog. (`89e9884`, `2cd97e7`)
+- `APP_VERSION` in `config/settings.py` as the single source of truth for the
+  running version; surfaced in the arena/monitor dashboard headers and the
+  arena's startup log line.
 
-## v5.0 — 2026-08-24 — `a581496`
-**"TBOT v5: multi-bot trading arena with ensemble ML strategies"**
+---
 
-The big one — everything from a single-strategy bot to an 8-bot arena, built up
-over an extended session:
-- **8-bot arena** (`bots/`): each bot gets its own $1,000, trades all 5 coins,
-  fully isolated from the others' errors.
+## [5.3.0] — 2026-08-25 — `1a0cb5b`
+
+### Removed
+- Momentum Rider and Weekly Trend Follower, trimming the roster from 7 to 5 —
+  cut by choice to focus the lineup, not for losing money (both were solidly
+  profitable, +9.6% and +6.8%, at the time). Open positions liquidated at the
+  live market price before removal.
+
+---
+
+## [5.2.0] — 2026-08-25 — `3866391`
+
+### Added
+- **Patient Trend AI**: a 4th from-scratch NumPy MLP bot, trained on a 2-day-
+  ahead target (vs. a few hours for the other AI bots) plus an extra 30-day
+  macro "regime" feature. No take-profit cap, 3% trailing stop instead of a
+  tight one — built to sit out chop/down-drift and only commit on a real
+  sustained trend. First attempt collapsed to always predicting HOLD (training
+  accuracy exactly matched the majority-class baseline); fixed by tuning the
+  label horizon/threshold and increasing model capacity, verified against real
+  data across all 5 coins before going live.
+
+### Removed
+- Scalper and Aggressive Multi-Vote — the only two bots never clearly profitable
+  after ~3 weeks live; fee-to-profit ratio never recovered even after the
+  stop-loss widening in v5.0.0 helped every other bot. Positions liquidated
+  first.
+
+### Fixed
+- The watchdog task's scheduled-task action wasn't set to run hidden, so its
+  5-minute health check flashed a visible console window every time. Fixed by
+  launching it through a hidden `wscript.exe` wrapper instead of PowerShell
+  directly.
+
+---
+
+## [5.1.0] — 2026-08-24 — `0db533b`
+
+### Added
+- `README.md`: what the project is, quick start, every bot explained, the
+  training pipeline, risk management, the reliability/self-healing design, the
+  web dashboard, a file-by-file breakdown of every tracked file, and a results
+  snapshot.
+
+---
+
+## [5.0.0] — 2026-08-24 — `a581496`
+
+**"TBOT v5: multi-bot trading arena with ensemble ML strategies"** — the
+architecture change from a single-strategy bot to a multi-bot arena.
+
+### Added
+- 8-bot arena (`bots/`): each bot gets its own $1,000, trades all 5 tracked
+  coins, and is fully isolated from the others' errors.
   - 5 rule-based bots: Momentum Rider, Scalper, Breakout Hunter, Weekly Trend
     Follower, Aggressive Multi-Vote — each with distinct entry logic and
     stop-loss/take-profit/trailing-stop parameters.
   - Neural Net Trader: from-scratch NumPy MLP (2-layer, ReLU, softmax, manual
-    backprop), trained locally, no API/cost.
+    backprop), trained locally, no paid API.
   - Random Forest Trader: from-scratch bagged ensemble of 25 decision trees.
   - Ensemble Meta-Trader: a second MLP "stacked" on what the Neural Net and
     Random Forest already predict.
-- **Training pipeline**: full year of hourly data per coin, bar-by-bar backtest
-  gating for rule-based bots, shared feature engineering for the AI models.
-- **Fee-aware paper trading** (`risk/spot_guard.py`): real 0.1% Binance taker
-  fee modeled on both entry and exit; exits always fully close a position
+- Full-year hourly training pipeline per coin; bar-by-bar backtest gating for
+  rule-based bots; shared feature engineering for the AI models.
+- Fee-aware paper trading (`risk/spot_guard.py`): real 0.1% Binance taker fee
+  modeled on both entry and exit; exits always fully close a position
   regardless of entry chunk size.
-- **Confidence-scaled position sizing** (`bots/position_sizing.py`): $100
-  chunks, 1–4 chunks depending on signal confidence.
-- **Resumable, unlimited-duration sessions**: checkpointed after every symbol
-  evaluation; `SESSION_DURATION_HOURS` set effectively unlimited (10 years)
-  instead of auto-finalizing on a fixed 24h window.
-- **Reliability**: arena/monitor run as detached Windows Scheduled Tasks
-  (survive terminal/IDE closing), self-restart in-process on crash, and a
+- Confidence-scaled position sizing (`bots/position_sizing.py`): $100 chunks,
+  1–4 chunks depending on signal confidence.
+- Resumable, effectively-unlimited-duration sessions: checkpointed after every
+  symbol evaluation; session duration set to 10 years instead of
+  auto-finalizing on a fixed 24h window.
+- Reliability: arena/monitor run as detached Windows Scheduled Tasks (survive
+  terminal/IDE closing), self-restart in-process on crash, and a
   `TBOT-Watchdog` task checks every 5 minutes and relaunches either if it's
-  not running (the safety net for extended laptop sleep/hibernate).
-- **Live web dashboard** (`dashboard/`): `/arena` leaderboard with live price
+  not running.
+- Live web dashboard (`dashboard/`): `/arena` leaderboard with live price
   ticker, per-bot detail, equity history, and activity log.
-- **Stop-loss widened to 10% across all bots**: originally 0.25–0.8% per bot,
+
+### Changed
+- Stop-loss widened to 10% across all bots — originally 0.25–0.8% per bot,
   which meant ordinary volatility kept triggering exits before positions could
   recover. Widened uniformly so bots hold through drawdown instead of getting
   chopped by noise.
-- Also retained the original single-strategy engine (`engine/`, `run_session.py`)
-  for comparison, optionally Claude-API-advised (`ai/`) though unused by default.
 
-## v0.7 — 2026-06-28 — `f588fb0`
-**"Added dashboard, RSI, charts and project architecture"**
+---
+
+## [0.7.0] — 2026-06-28 — `f588fb0`
+
+### Added
 - Terminal market dashboard, RSI analysis, candlestick charts (`mplfinance`),
   and the initial modular project structure (config/exchange/data/indicators/
   strategies/risk/services/controllers).
 
-## v0.1 — 2026-06-28 — `004766e`
-**"Version 0.1 - Live BTC Price"**
+---
+
+## [0.1.0] — 2026-06-28 — `004766e`
+
+### Added
 - The very first version: fetch and print the live BTC/USDT price from Binance.

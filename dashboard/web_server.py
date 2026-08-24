@@ -6,6 +6,7 @@ from flask import Flask, jsonify, render_template
 
 from bots.bot_configs import BOTS
 from config.settings import (
+    APP_VERSION,
     DECISION_ENGINE,
     STATE_DIR,
     TRACKED_SYMBOLS,
@@ -37,12 +38,12 @@ app = Flask(__name__)
 
 @app.route("/")
 def index():
-    return render_template("monitor.html", refresh_seconds=WEB_MONITOR_REFRESH_SECONDS)
+    return render_template("monitor.html", refresh_seconds=WEB_MONITOR_REFRESH_SECONDS, app_version=APP_VERSION)
 
 
 @app.route("/arena")
 def arena():
-    return render_template("arena.html", refresh_seconds=WEB_MONITOR_REFRESH_SECONDS)
+    return render_template("arena.html", refresh_seconds=WEB_MONITOR_REFRESH_SECONDS, app_version=APP_VERSION)
 
 
 @app.route("/api/status")
