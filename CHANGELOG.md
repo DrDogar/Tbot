@@ -8,10 +8,15 @@ GitHub until explicitly requested. Entries under **[Unreleased]** exist locally 
 
 ---
 
-## [Unreleased]
+## [Unreleased] — local commits not yet pushed to GitHub
 
-Nothing pending — the last commit below is the current `HEAD`, not yet pushed
-further work will land here first.
+- `0fea1ba` — **Hide the arena/monitor console windows too.** Task Scheduler was
+  launching `python.exe` directly for both tasks, which pops a visible console
+  window (same root cause as the earlier watchdog fix). Both now launch through
+  `scripts/run_hidden.vbs` (hidden `wscript.exe` wrapper, waits and passes the
+  exit code through so restart-on-failure still works) — same proven pattern
+  already used for `TBOT-Watchdog`.
+- `89e9884` — Added this changelog.
 
 ---
 
