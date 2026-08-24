@@ -101,6 +101,18 @@ def get_last_week_market_data(symbol, timeframe="1h", lookback_days=7):
     )
 
 
+def get_regime_market_data(symbol, timeframe="1h", lookback_days=30):
+    now_ms = exchange.milliseconds()
+    since_ms = now_ms - (lookback_days * 24 * 60 * 60 * 1000)
+
+    return get_historical_market_data(
+        symbol=symbol,
+        timeframe=timeframe,
+        since_ms=since_ms,
+        until_ms=now_ms,
+    )
+
+
 def get_last_year_market_data(symbol, timeframe="1h", lookback_days=365):
     now_ms = exchange.milliseconds()
     since_ms = now_ms - (lookback_days * 24 * 60 * 60 * 1000)

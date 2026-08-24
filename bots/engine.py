@@ -7,8 +7,16 @@ from bots.neural_model import feature_vector, predict as neural_predict
 from bots.position_manager import check_exit
 from bots.position_sizing import size_position
 from bots.trainer import is_coin_allowed_for_bot
-from config.settings import DEFAULT_LIMIT, DEFAULT_TIMEFRAME, TAKER_FEE_PCT, WEEKLY_TIMEFRAME
-from data.collector import get_last_week_market_data, get_market_data
+from bots.trend_ai_model import regime_feature_vector
+from config.settings import (
+    DEFAULT_LIMIT,
+    DEFAULT_TIMEFRAME,
+    REGIME_LOOKBACK_DAYS,
+    REGIME_TIMEFRAME,
+    TAKER_FEE_PCT,
+    WEEKLY_TIMEFRAME,
+)
+from data.collector import get_last_week_market_data, get_market_data, get_regime_market_data
 from indicators.rsi import calculate_rsi
 from portfolio.portfolio_state import apply_fill, get_position
 from risk.spot_guard import SpotAccountSnapshot, build_spot_trade_plan
@@ -23,10 +31,13 @@ class ArenaSignal:
 
 
 def evaluate_symbol_for_all_bots(
-    symbol, bots, portfolios, training, neural_weights, forest_models, ensemble_weights, timestamp
+    symbol, bots, portfolios, training, neural_weights, forest_models, ensemble_weights, trend_weights, timestamp
 ):
     weekly_df = get_last_week_market_data(symbol, timeframe=WEEKLY_TIMEFRAME)
     weekly_context = summarize_weekly_context(weekly_df)
+
+    regime_df = get_regime_market_data(symbol, timeframe=REGIME_TIMEFRAME, lookback_days=REGIME_LOOKBACK_DAYS)
+    regime_context = summarize_weekly_context(regime_df)
 
     current_df = calculate_rsi(get_market_data(symbol, timeframe=DEFAULT_TIMEFRAME, limit=DEFAULT_LIMIT))
     price = float(current_df.iloc[-1]["Close"])
@@ -44,8 +55,10 @@ def evaluate_symbol_for_all_bots(
                 neural_weights,
                 forest_models,
                 ensemble_weights,
+                trend_weights,
                 current_df,
                 weekly_context,
+                regime_context,
                 price,
                 timestamp,
             )
@@ -72,8 +85,10 @@ def _evaluate_one_bot(
     neural_weights,
     forest_models,
     ensemble_weights,
+    trend_weights,
     current_df,
     weekly_context,
+    regime_context,
     price,
     timestamp,
 ):
@@ -102,7 +117,16 @@ def _evaluate_one_bot(
         return "HOLD", ""
 
     entry_signal = _get_entry_signal(
-        bot, symbol, current_df, weekly_context, training, neural_weights, forest_models, ensemble_weights
+        bot,
+        symbol,
+        current_df,
+        weekly_context,
+        regime_context,
+        training,
+        neural_weights,
+        forest_models,
+        ensemble_weights,
+        trend_weights,
     )
 
     if not entry_signal.should_enter:
@@ -121,7 +145,34 @@ def _evaluate_one_bot(
     return "HOLD", entry_signal.reason
 
 
-def _get_entry_signal(bot, symbol, current_df, weekly_context, training, neural_weights, forest_models, ensemble_weights):
+def _get_entry_signal(
+    bot,
+    symbol,
+    current_df,
+    weekly_context,
+    regime_context,
+    training,
+    neural_weights,
+    forest_models,
+    ensemble_weights,
+    trend_weights,
+):
+    if bot.uses_trend_ai:
+        weights = trend_weights.get(symbol)
+
+        if weights is None:
+            return EntrySignal(False, 0.0, "Not enough historical data to train a trend model for this coin.")
+
+        features = regime_feature_vector(current_df, weekly_context, regime_context)
+        action, confidence = neural_predict(weights, features)
+
+        if action == "BUY":
+            return EntrySignal(
+                True, confidence, f"Patient Trend AI sees a sustained uptrend forming ({confidence:.0%} confidence)."
+            )
+
+        return EntrySignal(False, confidence, f"Patient Trend AI says {action} -- no strong trend yet ({confidence:.0%}).")
+
     if bot.uses_ensemble:
         weights = neural_weights.get(symbol)
         forest = forest_models.get(symbol)

@@ -2,10 +2,8 @@ from dataclasses import dataclass
 from typing import Callable, Optional
 
 from bots.entry_strategies import (
-    aggressive_voter_entry,
     breakout_entry,
     momentum_rider_entry,
-    scalper_entry,
     trend_follower_entry,
 )
 
@@ -23,6 +21,7 @@ class BotConfig:
     uses_neural_net: bool = False
     uses_forest: bool = False
     uses_ensemble: bool = False
+    uses_trend_ai: bool = False
 
 
 BOTS = [
@@ -34,16 +33,6 @@ BOTS = [
         stop_loss_pct=10.0,
         take_profit_pct=None,
         trailing_stop_pct=0.4,
-        starting_quote_balance=1000.0,
-    ),
-    BotConfig(
-        key="scalper",
-        name="Scalper",
-        description="Fast, small trades off short-term RSI dips. Tiny take-profit, high frequency, wide (10%) stop-loss.",
-        entry_fn=scalper_entry,
-        stop_loss_pct=10.0,
-        take_profit_pct=0.35,
-        trailing_stop_pct=None,
         starting_quote_balance=1000.0,
     ),
     BotConfig(
@@ -63,16 +52,6 @@ BOTS = [
         entry_fn=trend_follower_entry,
         stop_loss_pct=10.0,
         take_profit_pct=1.6,
-        trailing_stop_pct=None,
-        starting_quote_balance=1000.0,
-    ),
-    BotConfig(
-        key="aggressive_voter",
-        name="Aggressive Multi-Vote",
-        description="The full RSI/EMA/volume/volatility/price-action/weekly-trend model, with a low confidence bar.",
-        entry_fn=aggressive_voter_entry,
-        stop_loss_pct=10.0,
-        take_profit_pct=0.8,
         trailing_stop_pct=None,
         starting_quote_balance=1000.0,
     ),
@@ -109,10 +88,9 @@ BOTS = [
         key="ensemble_meta",
         name="Ensemble Meta-Trader",
         description=(
-            "The smartest bot in the arena: a stacking ensemble trained not just on raw price signals, but on "
-            "what the Neural Net Trader and Random Forest Trader already predicted at each point in the last "
-            "year -- learning when to trust which one instead of guessing from scratch. Built from scratch, "
-            "trained locally, no API/cost."
+            "A stacking ensemble trained not just on raw price signals, but on what the Neural Net Trader and "
+            "Random Forest Trader already predicted at each point in the last year -- learning when to trust "
+            "which one instead of guessing from scratch. Built from scratch, trained locally, no API/cost."
         ),
         entry_fn=None,
         stop_loss_pct=10.0,
@@ -120,6 +98,23 @@ BOTS = [
         trailing_stop_pct=None,
         starting_quote_balance=1000.0,
         uses_ensemble=True,
+    ),
+    BotConfig(
+        key="trend_ai",
+        name="Patient Trend AI",
+        description=(
+            "The most patient bot in the arena: a from-scratch neural net trained to spot 2-day-ahead moves "
+            "(not 3-hour ones), using an extra 30-day macro regime feature the other bots don't see. It only "
+            "acts on genuinely large, sustained trends -- otherwise it sits in cash. No take-profit cap, so a "
+            "real trend is allowed to run, and a wide 3% trailing stop instead of a tight one. Built to wait "
+            "out down/choppy seasons and ride real up-seasons. Trained locally, no API/cost."
+        ),
+        entry_fn=None,
+        stop_loss_pct=10.0,
+        take_profit_pct=None,
+        trailing_stop_pct=3.0,
+        starting_quote_balance=1000.0,
+        uses_trend_ai=True,
     ),
 ]
 

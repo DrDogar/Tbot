@@ -63,32 +63,10 @@ Register-DetachedTask "TBOT-Monitor" "run_monitor.py"
 
 # Watchdog: Task Scheduler's own restart-on-failure doesn't reliably bring the two
 # tasks above back after this laptop does an extended sleep/hibernate (observed one
-# sitting dead for over a day after a ~25h sleep with no auto-recovery). This runs
-# every 5 minutes and relaunches whichever of them isn't "Running".
-$watchdogName = "TBOT-Watchdog"
-$watchdogScript = Join-Path $projectRoot "scripts\watchdog.ps1"
-
-if (Get-ScheduledTask -TaskName $watchdogName -ErrorAction SilentlyContinue) {
-    Stop-ScheduledTask -TaskName $watchdogName -ErrorAction SilentlyContinue
-    Unregister-ScheduledTask -TaskName $watchdogName -Confirm:$false
-}
-
-$watchdogAction = New-ScheduledTaskAction -Execute "powershell.exe" `
-    -Argument "-ExecutionPolicy Bypass -NonInteractive -File `"$watchdogScript`"" -WorkingDirectory $projectRoot
-$watchdogTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) `
-    -RepetitionInterval (New-TimeSpan -Minutes 5) -RepetitionDuration (New-TimeSpan -Days 3650)
-$watchdogSettings = New-ScheduledTaskSettingsSet `
-    -StartWhenAvailable `
-    -DontStopOnIdleEnd `
-    -MultipleInstances IgnoreNew `
-    -AllowStartIfOnBatteries `
-    -DontStopIfGoingOnBatteries `
-    -ExecutionTimeLimit (New-TimeSpan -Minutes 2)
-
-Register-ScheduledTask -TaskName $watchdogName -Action $watchdogAction -Trigger $watchdogTrigger -Settings $watchdogSettings `
-    -Description "Checks every 5 minutes that TBOT-Arena and TBOT-Monitor are running, and restarts either if not." | Out-Null
-
-Write-Host "Registered watchdog task '$watchdogName' (checks every 5 minutes)"
+# sitting dead for over a day after a ~25h sleep with no auto-recovery). Registration
+# lives in its own script (runs the check via a hidden wscript.exe wrapper -- no visible
+# console window every 5 minutes) so there's exactly one place that defines it.
+& (Join-Path $projectRoot "scripts\register_watchdog_task.ps1")
 
 Write-Host ""
 Write-Host "Both tasks registered and started. They will keep running (and auto-restart on crash"

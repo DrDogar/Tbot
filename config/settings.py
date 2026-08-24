@@ -124,6 +124,12 @@ NEURAL_TRAINING_TIMEFRAME = "1h"
 
 NEURAL_TRAINING_LOOKBACK_DAYS = 365
 
+# Macro "regime" window for the Patient Trend AI bot -- long enough to tell a broad
+# bull season from a bear one, unlike the 7-day weekly context every bot already sees.
+REGIME_TIMEFRAME = "1h"
+
+REGIME_LOOKBACK_DAYS = 30
+
 # Effectively unlimited -- runs continuously until manually stopped rather than
 # auto-finalizing after a fixed window (10 years, to avoid float('inf') JSON edge cases).
 SESSION_DURATION_HOURS = 24.0 * 365 * 10

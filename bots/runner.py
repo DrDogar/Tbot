@@ -14,6 +14,12 @@ from bots.neural_model import (
     train_network,
 )
 from bots.trainer import train_bot_on_symbol
+from bots.trend_ai_model import (
+    EPOCHS as TREND_EPOCHS,
+    HIDDEN_UNITS as TREND_HIDDEN_UNITS,
+    LEARNING_RATE as TREND_LEARNING_RATE,
+    build_long_training_dataset,
+)
 from config.settings import (
     NEURAL_TRAINING_LOOKBACK_DAYS,
     NEURAL_TRAINING_TIMEFRAME,
@@ -44,6 +50,7 @@ LAST_CYCLE_PATH = ARENA_DIR / "last_cycle.json"
 NEURAL_WEIGHTS_PATH = ARENA_DIR / "neural_weights.json"
 FOREST_WEIGHTS_PATH = ARENA_DIR / "forest_weights.json"
 ENSEMBLE_WEIGHTS_PATH = ARENA_DIR / "ensemble_weights.json"
+TREND_WEIGHTS_PATH = ARENA_DIR / "trend_ai_weights.json"
 
 logger = get_logger()
 
@@ -77,6 +84,7 @@ def _run_training():
     neural_weights = {}
     forest_models = {}
     ensemble_weights = {}
+    trend_weights = {}
 
     for symbol in TRACKED_SYMBOLS:
         logger.info(
@@ -90,7 +98,7 @@ def _run_training():
         )
 
         for bot in BOTS:
-            if bot.uses_neural_net or bot.uses_forest or bot.uses_ensemble:
+            if bot.uses_neural_net or bot.uses_forest or bot.uses_ensemble or bot.uses_trend_ai:
                 continue
 
             result = train_bot_on_symbol(bot, symbol, year_df)
@@ -116,6 +124,7 @@ def _run_training():
             neural_weights[symbol] = None
             forest_models[symbol] = None
             ensemble_weights[symbol] = None
+            trend_weights[symbol] = None
             logger.info("Not enough data to train AI models on %s | %d rows.", symbol, len(year_df))
             continue
 
@@ -148,7 +157,25 @@ def _run_training():
                 len(stacked_features),
             )
 
-    return training, neural_weights, forest_models, ensemble_weights
+        # Patient Trend AI trains on its own longer-horizon dataset (3-day lookahead,
+        # 30-day regime feature), built from the same year_df but sliced differently.
+        trend_features, trend_labels = build_long_training_dataset(year_df)
+
+        if len(trend_features) < MIN_TRAINING_SAMPLES:
+            trend_weights[symbol] = None
+            logger.info("Not enough data to train Patient Trend AI on %s.", symbol)
+        else:
+            trend_weights[symbol] = train_network(
+                trend_features, trend_labels, hidden_dim=TREND_HIDDEN_UNITS, epochs=TREND_EPOCHS, lr=TREND_LEARNING_RATE
+            )
+            logger.info(
+                "Trained Patient Trend AI on %s | %d rows | %d samples | converged",
+                symbol,
+                len(year_df),
+                len(trend_features),
+            )
+
+    return training, neural_weights, forest_models, ensemble_weights, trend_weights
 
 
 def _run_training_with_retry(max_attempts=3, backoff_seconds=30):
@@ -176,6 +203,7 @@ def run_bot_arena():
     neural_weights = load_all_weights(NEURAL_WEIGHTS_PATH)
     forest_models = load_all_forests(FOREST_WEIGHTS_PATH)
     ensemble_weights = load_all_weights(ENSEMBLE_WEIGHTS_PATH)
+    trend_weights = load_all_weights(TREND_WEIGHTS_PATH)
     portfolios = {bot.key: load_portfolio_state(_portfolio_path(bot.key)) for bot in BOTS}
     last_cycle = _load_json(LAST_CYCLE_PATH) or {}
 
@@ -187,11 +215,12 @@ def run_bot_arena():
             generate_arena_report(BOTS, portfolios, run_state)
 
         logger.info("Starting a new %.0fh, %d-bot arena across %s", SESSION_DURATION_HOURS, len(BOTS), TRACKED_SYMBOLS)
-        training, neural_weights, forest_models, ensemble_weights = _run_training_with_retry()
+        training, neural_weights, forest_models, ensemble_weights, trend_weights = _run_training_with_retry()
         _save_json(training, TRAINING_PATH)
         save_all_weights(neural_weights, NEURAL_WEIGHTS_PATH)
         save_all_forests(forest_models, FOREST_WEIGHTS_PATH)
         save_all_weights(ensemble_weights, ENSEMBLE_WEIGHTS_PATH)
+        save_all_weights(trend_weights, TREND_WEIGHTS_PATH)
 
         run_state = new_run_state(TRACKED_SYMBOLS, SESSION_DURATION_HOURS, SESSION_INTERVAL_SECONDS, now)
         portfolios = {bot.key: new_portfolio(TRACKED_SYMBOLS, bot.starting_quote_balance) for bot in BOTS}
@@ -228,13 +257,14 @@ def run_bot_arena():
             run_state.duration_hours = SESSION_DURATION_HOURS
             save_run_state(run_state, RUN_STATE_PATH)
 
-        if training is None or not neural_weights or not forest_models or not ensemble_weights:
+        if training is None or not neural_weights or not forest_models or not ensemble_weights or not trend_weights:
             try:
-                training, neural_weights, forest_models, ensemble_weights = _run_training_with_retry()
+                training, neural_weights, forest_models, ensemble_weights, trend_weights = _run_training_with_retry()
                 _save_json(training, TRAINING_PATH)
                 save_all_weights(neural_weights, NEURAL_WEIGHTS_PATH)
                 save_all_forests(forest_models, FOREST_WEIGHTS_PATH)
                 save_all_weights(ensemble_weights, ENSEMBLE_WEIGHTS_PATH)
+                save_all_weights(trend_weights, TREND_WEIGHTS_PATH)
             except Exception:
                 # Don't let a stubborn network blip kill a resumed arena that already has
                 # hours of progress. Fall back to whatever training/weights exist (possibly
@@ -244,6 +274,7 @@ def run_bot_arena():
                 neural_weights = neural_weights or {}
                 forest_models = forest_models or {}
                 ensemble_weights = ensemble_weights or {}
+                trend_weights = trend_weights or {}
 
         logger.info(
             "Resuming arena %s | cycle %s | %.1f minutes remaining",
@@ -272,7 +303,15 @@ def run_bot_arena():
         for symbol in run_state.symbols:
             try:
                 symbol_records = evaluate_symbol_for_all_bots(
-                    symbol, BOTS, portfolios, training, neural_weights, forest_models, ensemble_weights, now.isoformat()
+                    symbol,
+                    BOTS,
+                    portfolios,
+                    training,
+                    neural_weights,
+                    forest_models,
+                    ensemble_weights,
+                    trend_weights,
+                    now.isoformat(),
                 )
 
                 for bot_key, record in symbol_records.items():
