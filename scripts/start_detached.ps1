@@ -22,6 +22,7 @@ $ErrorActionPreference = "Stop"
 
 $projectRoot = (Resolve-Path "$PSScriptRoot\..").Path
 $pythonExe = Join-Path $projectRoot ".venv\Scripts\python.exe"
+$runHiddenVbs = Join-Path $projectRoot "scripts\run_hidden.vbs"
 
 if (-not (Test-Path $pythonExe)) {
     throw "Could not find venv python at $pythonExe. Create the venv first."
@@ -39,7 +40,11 @@ function Register-DetachedTask($taskName, $scriptFile) {
         Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
     }
 
-    $action = New-ScheduledTaskAction -Execute $pythonExe -Argument "`"$scriptPath`"" -WorkingDirectory $projectRoot
+    # Runs via a hidden wscript.exe wrapper instead of calling python.exe directly --
+    # python.exe is a console app, so Task Scheduler would otherwise pop a visible
+    # window for it (same issue the watchdog had). run_hidden.vbs waits for the
+    # process and passes its exit code through, so restart-on-failure still works.
+    $action = New-ScheduledTaskAction -Execute "wscript.exe" -Argument "`"$runHiddenVbs`" `"$scriptFile`"" -WorkingDirectory $projectRoot
     $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddSeconds(5)
     $settings = New-ScheduledTaskSettingsSet `
         -RestartCount 999 `
