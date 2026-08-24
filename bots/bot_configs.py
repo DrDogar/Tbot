@@ -1,11 +1,7 @@
 from dataclasses import dataclass
 from typing import Callable, Optional
 
-from bots.entry_strategies import (
-    breakout_entry,
-    momentum_rider_entry,
-    trend_follower_entry,
-)
+from bots.entry_strategies import breakout_entry
 
 
 @dataclass(frozen=True)
@@ -26,32 +22,12 @@ class BotConfig:
 
 BOTS = [
     BotConfig(
-        key="momentum_rider",
-        name="Momentum Rider",
-        description="Rides confirmed uptrends with a trailing stop on winners. Gives losers room (10% stop) instead of cutting fast.",
-        entry_fn=momentum_rider_entry,
-        stop_loss_pct=10.0,
-        take_profit_pct=None,
-        trailing_stop_pct=0.4,
-        starting_quote_balance=1000.0,
-    ),
-    BotConfig(
         key="breakout_hunter",
         name="Breakout Hunter",
         description="Jumps on volume-backed breakouts above recent highs, with a fixed target and stop.",
         entry_fn=breakout_entry,
         stop_loss_pct=10.0,
         take_profit_pct=1.0,
-        trailing_stop_pct=None,
-        starting_quote_balance=1000.0,
-    ),
-    BotConfig(
-        key="trend_follower",
-        name="Weekly Trend Follower",
-        description="Only trades with the 7-day trend, entering on short-term pullbacks. Wider stop, wider target.",
-        entry_fn=trend_follower_entry,
-        stop_loss_pct=10.0,
-        take_profit_pct=1.6,
         trailing_stop_pct=None,
         starting_quote_balance=1000.0,
     ),

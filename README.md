@@ -11,7 +11,7 @@ Everything runs locally. No paid APIs, no cloud costs. The 4 "AI" bots are neura
 ## What it actually does
 
 1. Pulls live and historical OHLCV candles for `BTC/USDT, ETH/USDT, SOL/USDT, BNB/USDT, XRP/USDT` from Binance's public API (via `ccxt` — no account or API key needed).
-2. Trains all bots on the last **full year** of hourly data per coin: the 3 rule-based bots get backtested to see which coins they historically made money on; the 4 AI bots get properly trained.
+2. Trains all bots on the last **full year** of hourly data per coin: the 1 rule-based bot gets backtested to see which coins it historically made money on; the 4 AI bots get properly trained.
 3. Runs continuously, evaluating every bot against all 5 coins once a minute, simulating fills, fees, stop-losses and take-profits exactly as a real spot exchange would apply them.
 4. Serves a live web dashboard so you can watch every bot's equity, trades, and reasoning in real time.
 5. Is designed to survive the machine it runs on being unreliable — it checkpoints after every single action and self-heals if killed, the laptop sleeps, or the network drops.
@@ -23,7 +23,7 @@ Everything runs locally. No paid APIs, no cloud costs. The 4 "AI" bots are neura
 ```bash
 pip install -r requirements.txt
 
-python run_arena.py       # starts the 7-bot arena (resumable, runs forever until stopped)
+python run_arena.py       # starts the 5-bot arena (resumable, runs forever until stopped)
 python run_monitor.py     # starts the web dashboard
 ```
 
@@ -41,17 +41,17 @@ Every bot gets a fresh **$1,000**, trades across all 5 coins, and is fully isola
 
 | Bot | How it decides to enter | Stop-loss | Take-profit | Trailing stop |
 |---|---|---|---|---|
-| **Momentum Rider** | EMA(20) crosses above EMA(50) with a strong bullish candle | 10% | — (rides winners) | 0.4% off peak |
 | **Breakout Hunter** | Price breaks a 20-candle high on 1.2×+ volume | 10% | 1.0% | — |
-| **Weekly Trend Follower** | Only trades with the 7-day trend (+1.5% or more), entering on RSI pullbacks | 10% | 1.6% | — |
 | **Neural Net Trader** 🤖 | A from-scratch NumPy MLP (2-layer, ReLU, softmax, manual backprop) trained on a year of data per coin, predicting the next few hours | 10% | 0.8% | — |
 | **Random Forest Trader** 🤖 | A from-scratch bagged ensemble of 25 decision trees (Gini splits, feature-sampled), same short-horizon target as the neural net | 10% | 0.8% | — |
 | **Ensemble Meta-Trader** 🤖🤖 | A second NumPy MLP, "stacked" on top of the other two — trained on what the Neural Net *and* Random Forest already predicted, learning when to trust which one | 10% | 0.8% | — |
 | **Patient Trend AI** 🤖🤖🤖 | A third, separately-tuned NumPy MLP trained to predict 2-day-ahead moves (not a few hours), using an extra 30-day macro "regime" feature the others don't see. Deliberately selective — sits in cash through chop/down-drift, only acts on a real trend | 10% | — (rides winners) | 3% off peak |
 
-The first three AI bots share the same 6 engineered input features (RSI, EMA trend, volume, volatility, price action, weekly trend — see `strategies/market_models.py`) and predict SELL/HOLD/BUY with a confidence score. Patient Trend AI uses those same 6 plus a 7th (30-day regime) and a longer, harder-to-hit label, which needed more model capacity (12 hidden units, 1,200 training epochs vs. the others' 6/400) to actually learn instead of collapsing to always predicting HOLD — verified empirically before it went live (see `bots/trend_ai_model.py`). The rule-based bots use hand-written logic (`bots/entry_strategies.py`).
+The three original AI bots share the same 6 engineered input features (RSI, EMA trend, volume, volatility, price action, weekly trend — see `strategies/market_models.py`) and predict SELL/HOLD/BUY with a confidence score. Patient Trend AI uses those same 6 plus a 7th (30-day regime) and a longer, harder-to-hit label, which needed more model capacity (12 hidden units, 1,200 training epochs vs. the others' 6/400) to actually learn instead of collapsing to always predicting HOLD — verified empirically before it went live (see `bots/trend_ai_model.py`). Breakout Hunter uses hand-written logic (`bots/entry_strategies.py`).
 
-**Retired**: Scalper (tiny 0.35% take-profit, high frequency) and Aggressive Multi-Vote were removed after both proved to be net losers over ~3 weeks of live trading — their fee-to-profit ratio never recovered even after the stop-loss widening below helped every other bot. Any open position was liquidated at the live market price before removal; their historical portfolio/trade data is still on disk (`state/bots/portfolio_scalper.json`, `portfolio_aggressive_voter.json`) for the record, they just no longer trade.
+**Retired**: 4 of the original 9 bots have been pulled from the roster so far. Each time, any open position was liquidated at the live market price before removal, and the historical portfolio/trade data stays on disk (`state/bots/portfolio_<key>.json`) for the record — they just no longer trade.
+- **Scalper** and **Aggressive Multi-Vote** — removed after both proved to be net losers over ~3 weeks of live trading; their fee-to-profit ratio never recovered even after the stop-loss widening below helped every other bot.
+- **Momentum Rider** and **Weekly Trend Follower** — removed to trim the roster to 5, not for losing money (both were solidly profitable, +9.6% and +6.8%, at the time). Weekly Trend Follower was the weakest performer among the active traders; Momentum Rider was cut by choice rather than by results.
 
 **Position sizing** is confidence-scaled: every entry is sized in **$100 chunks**, 1–4 chunks depending on how confident the signal is (`bots/position_sizing.py`), so a 90%-confidence AI prediction risks more than a 30%-confidence one.
 
@@ -64,7 +64,7 @@ The first three AI bots share the same 6 engineered input features (RSI, EMA tre
 Every time the arena (re)starts, and any time a new bot joins mid-run:
 
 1. For each of the 5 coins, fetch the **last 365 days of 1-hour candles** (`data/collector.py`).
-2. For each of the 3 rule-based bots, replay that whole year bar-by-bar through the bot's own entry/exit logic (`bots/trainer.py`) to see how it would have performed — this decides whether that bot is allowed to trade that coin live (a coin it lost money on in the backtest is blocked, unless it has zero trade history).
+2. For the 1 rule-based bot (Breakout Hunter), replay that whole year bar-by-bar through its own entry/exit logic (`bots/trainer.py`) to see how it would have performed — this decides whether it's allowed to trade a given coin live (a coin it lost money on in the backtest is blocked, unless it has zero trade history).
 3. Build one shared feature/label dataset from that year of data (`bots/neural_model.py: build_training_dataset`) — reused by the Neural Net, Random Forest, and Ensemble so the expensive feature engineering only happens once per coin.
 4. Train the Neural Net (gradient descent) and Random Forest (bagged trees) on that dataset.
 5. Train the Ensemble Meta-Trader on a *second* dataset built from what the Neural Net and Random Forest already predicted at each historical point (`bots/ensemble_model.py`), so it learns when to trust which one.
@@ -81,7 +81,7 @@ A full retrain (~4 minutes) only happens on a fresh start, when a brand-new bot 
 - **Exits always fully close a position**, however many $100 chunks it was built from — only entries are capped at `MAX_TRADE_QUOTE_AMOUNT` ($500); an exit is never artificially clamped, because a stop-loss that can't fully close a position isn't really a stop-loss.
 - **Three independent exit triggers**, checked every cycle (`bots/position_manager.py`):
   - **Stop-loss** — hard exit if the position is down more than the bot's `stop_loss_pct` from entry.
-  - **Trailing stop** — (Momentum Rider only) locks in gains by exiting if price falls more than 0.4% off its peak *while still in profit*.
+  - **Trailing stop** — (Patient Trend AI only) locks in gains by exiting if price falls more than 3% off its peak *while still in profit*.
   - **Take-profit** — locks in gains once the position is up `take_profit_pct`.
 
 ---
@@ -103,7 +103,7 @@ This started as a laptop that "turns off on its own," so a lot of the engineerin
 
 `dashboard/web_server.py` is a small Flask app with two views:
 
-- **`/arena`** — the live 7-bot leaderboard: equity, P&L%, trade count, fees paid, live price ticker, per-coin positions and reasoning, and a recent-activity log. This is the main view.
+- **`/arena`** — the live 5-bot leaderboard: equity, P&L%, trade count, fees paid, live price ticker, per-coin positions and reasoning, and a recent-activity log. This is the main view.
 - **`/`** — a single-strategy monitor for the older `run_session.py` engine (see below).
 
 Both poll `state/*.json` and `state/*.csv` on an interval (`WEB_MONITOR_REFRESH_SECONDS`, default 5s) — the dashboard is a pure read-only viewer over the same state files the arena writes, so it never affects trading.
@@ -117,7 +117,7 @@ Both poll `state/*.json` and `state/*.csv` on an interval (`WEB_MONITOR_REFRESH_
 | File | Purpose |
 |---|---|
 | `main.py` | Interactive menu covering every feature (single-symbol tools, the old single-strategy session, and the arena). |
-| `run_arena.py` | Starts/resumes the 7-bot arena, unattended. Self-restarts on crash. |
+| `run_arena.py` | Starts/resumes the 5-bot arena, unattended. Self-restarts on crash. |
 | `run_monitor.py` | Starts the Flask web dashboard. Self-restarts on crash. |
 | `run_session.py` | Starts/resumes the older single-portfolio, single-strategy 24h session (see [Two systems](#two-systems-in-this-repo)). |
 
@@ -127,10 +127,10 @@ Both poll `state/*.json` and `state/*.csv` on an interval (`WEB_MONITOR_REFRESH_
 |---|---|
 | `bot_configs.py` | Declares every bot: name, entry function, stop-loss/take-profit/trailing-stop, which AI model (if any) it uses. |
 | `engine.py` | Evaluates one coin against every bot for one cycle: checks exits first, then entries; fully isolates each bot's errors from the others. |
-| `entry_strategies.py` | The 3 active rule-based bots' entry logic (Momentum Rider, Breakout Hunter, Weekly Trend Follower), plus the retired Scalper/Aggressive Multi-Vote logic (unused but kept for the record). |
+| `entry_strategies.py` | Breakout Hunter's entry logic (the one active rule-based bot), plus the retired Momentum Rider/Weekly Trend Follower/Scalper/Aggressive Multi-Vote logic (unused but kept for the record). |
 | `position_manager.py` | Stop-loss / trailing-stop / take-profit exit logic, shared by every bot. |
 | `position_sizing.py` | Confidence → $100-chunk position size (1–4 chunks). |
-| `trainer.py` | Bar-by-bar backtester used to train and gate the 3 rule-based bots on a year of data. |
+| `trainer.py` | Bar-by-bar backtester used to train and gate the rule-based bot(s) on a year of data. |
 | `neural_model.py` | The from-scratch NumPy MLP: feature engineering, dataset building, training (manual backprop), inference, JSON (de)serialization. Shared feature code is reused by the Random Forest and Ensemble bots too. |
 | `forest_model.py` | The from-scratch Random Forest: Gini-impurity tree building, bagging, feature subsampling, quantile-based split search (kept fast enough to train on a year of hourly data), JSON (de)serialization. |
 | `ensemble_model.py` | The stacking Ensemble Meta-Trader: builds a training set from the Neural Net's and Random Forest's own predictions, then trains a third MLP (reusing `neural_model`'s trainer) on top of them. |
@@ -190,7 +190,7 @@ Both poll `state/*.json` and `state/*.csv` on an interval (`WEB_MONITOR_REFRESH_
 | File | Purpose |
 |---|---|
 | `web_server.py` | The Flask app: `/api/status` and `/api/arena-status` JSON endpoints, `/` and `/arena` pages, live price fetching for the ticker. |
-| `templates/arena.html` | The 7-bot arena dashboard: leaderboard, live price ticker, per-bot detail cards, activity log. |
+| `templates/arena.html` | The 5-bot arena dashboard: leaderboard, live price ticker, per-bot detail cards, activity log. |
 | `templates/monitor.html` | The single-strategy dashboard. |
 | `market_dashboard.py` | A terminal (non-web) snapshot dashboard for one symbol, used by the `main.py` menu. |
 
@@ -237,7 +237,7 @@ Both poll `state/*.json` and `state/*.csv` on an interval (`WEB_MONITOR_REFRESH_
 
 ## Two systems in this repo
 
-TBOT grew from a single-strategy bot into an 7-bot arena, and both still work:
+TBOT grew from a single-strategy bot into a 5-bot arena, and both still work:
 
 - **The arena** (`bots/`, `run_arena.py`, `/arena`) — the current system, described above. Independently-risked bots, $1,000 each.
 - **The single-strategy session** (`engine/`, `run_session.py`, `/`) — the original design: one portfolio, one strategy (the same RSI/EMA/volume/volatility/price-action vote used by `aggressive_voter_entry`), optionally decided by the Claude API instead of the local model. Kept for comparison and because `main.py`'s menu still exposes it.
@@ -246,17 +246,15 @@ TBOT grew from a single-strategy bot into an 7-bot arena, and both still work:
 
 ## Results to date
 
-**As of 2026-08-25** — the arena has been running continuously (with a couple of brief, self-healed interruptions) since **2026-08-02**, roughly **22 days**, cycle **5,299**. $1,000 starting balance per bot, all figures paper-trading only.
+**As of 2026-08-25** — the arena has been running continuously (with a couple of brief, self-healed interruptions) since **2026-08-02**, roughly **22 days**, cycle **5,308**. $1,000 starting balance per bot, all figures paper-trading only. The roster was trimmed from 7 to 5 bots on this date (see below), so this table is a fresh start for tracking the current lineup, not a continuation of the 7-bot numbers.
 
 | Rank | Bot | Equity | P&L | Trades | Fees paid | Realized P&L |
 |---|---|---|---|---|---|---|
-| 1 | 🤖 Random Forest Trader | $1,178.12 | **+17.81%** | 285 | $55.01 | $211.68 |
-| 2 | 🤖 Neural Net Trader | $1,173.22 | **+17.32%** | 292 | $58.42 | $220.23 |
-| 3 | Breakout Hunter | $1,141.50 | **+14.15%** | 123 | $33.37 | $168.01 |
-| 4 | 🤖🤖 Ensemble Meta-Trader | $1,119.12 | **+11.91%** | 115 | $20.94 | $135.70 |
-| 5 | Momentum Rider | $1,096.08 | **+9.61%** | 76 | $18.92 | $118.47 |
-| 6 | Weekly Trend Follower | $1,067.48 | **+6.75%** | 25 | $7.87 | $74.68 |
-| 7 | 🤖🤖🤖 Patient Trend AI | $1,000.00 | 0.00% | 0 | $0.00 | $0.00 |
+| 1 | 🤖 Random Forest Trader | $1,176.09 | **+17.61%** | 285 | $55.01 | $211.68 |
+| 2 | 🤖 Neural Net Trader | $1,171.32 | **+17.13%** | 292 | $58.42 | $220.23 |
+| 3 | Breakout Hunter | $1,140.85 | **+14.08%** | 123 | $33.37 | $168.01 |
+| 4 | 🤖🤖 Ensemble Meta-Trader | $1,116.60 | **+11.66%** | 117 | $21.34 | $137.24 |
+| 5 | 🤖🤖🤖 Patient Trend AI | $1,000.00 | 0.00% | 0 | $0.00 | $0.00 |
 
 Market context: BTC ran from ~$63,000 to ~$79,000 over the period (+~25%), with a rough patch in the first week (down to ~$62,700) before the broader rally. ETH, SOL, BNB, and XRP all moved similarly.
 
@@ -264,9 +262,9 @@ Market context: BTC ran from ~$63,000 to ~$79,000 over the period (+~25%), with 
 
 - **The stop-loss change mattered.** In the first week, with tight per-bot stops (0.25–0.8%), every single bot was in the red — small, ordinary volatility kept triggering stop-losses before positions could recover, and round-trip fees compounded the damage. After widening every bot's stop-loss to a uniform 10% (holding through drawdown instead of cutting fast), the surviving bots are now all solidly positive, riding the market's actual trend instead of getting shaken out of it.
 - **Both original from-scratch AI models are winning.** Neural Net Trader and Random Forest Trader — the two models trained on a full year of data — are the top two performers, and by a clear margin. They also trade the most (285–292 trades), which under the old tight-stop regime was a liability (more trades = more chances to get chopped) but under the wide-stop regime turned into an advantage (more chances to catch a real move).
-- **The selective ensemble bet is paying off differently than expected.** Ensemble Meta-Trader was designed to be more selective — and it is (115 trades vs. 285–292 for the two models it's built on) — but that selectivity has so far cost it upside in a strongly trending market, landing it 4th rather than 1st. It's still clearly profitable and pays the least in fees per dollar earned of the three original AI bots, which may matter more in a choppier market than this one has mostly been.
-- **Scalper and Aggressive Multi-Vote were retired (2026-08-25).** Both were the only two bots never clearly profitable — high-frequency, tight-take-profit designs that kept exiting winners early even after the stop-loss widening helped everyone else. Their open positions were liquidated and they were pulled from the active roster; their history is preserved on disk.
-- **Patient Trend AI just joined (2026-08-25) — no track record yet.** It's the most deliberately selective bot by design: trained on a 2-day-ahead target (vs. a few hours for the other AI bots) plus an extra 30-day macro regime feature, specifically so it can sit out chop/down-drift and only commit to a real, sustained trend. Getting that target to actually learn (rather than collapsing to always-HOLD) took real tuning — more model capacity and a carefully chosen horizon/threshold, verified against real data before going live. Its first live prediction across the 5 coins was mixed (HOLD on some, SELL on others) despite the broad uptrend, which is the intended behavior: it isn't a blind trend-follower, it combines the macro regime with near-term technicals before committing capital.
+- **The selective ensemble bet is paying off differently than expected.** Ensemble Meta-Trader was designed to be more selective — and it is (117 trades vs. 285–292 for the two models it's built on) — but that selectivity has so far cost it upside in a strongly trending market, landing it 4th rather than 1st. It's still clearly profitable and pays the least in fees per dollar earned of the three original AI bots, which may matter more in a choppier market than this one has mostly been.
+- **The roster has been trimmed twice (both 2026-08-25).** First, Scalper and Aggressive Multi-Vote were retired — the only two bots never clearly profitable, both high-frequency/tight-take-profit designs that kept exiting winners early even after the stop-loss widening helped everyone else. Then Momentum Rider and Weekly Trend Follower were cut too, this time by choice rather than results (both were solidly profitable, +9.6% and +6.8%), to bring the arena down to a focused 5-bot lineup. All open positions were liquidated at the live price before each removal; full history stays on disk.
+- **Patient Trend AI just joined — no track record yet.** It's the most deliberately selective bot by design: trained on a 2-day-ahead target (vs. a few hours for the other AI bots) plus an extra 30-day macro regime feature, specifically so it can sit out chop/down-drift and only commit to a real, sustained trend. Getting that target to actually learn (rather than collapsing to always-HOLD) took real tuning — more model capacity and a carefully chosen horizon/threshold, verified against real data before going live. Its first live prediction across the 5 coins was mixed (HOLD on some, SELL on others) despite the broad uptrend, which is the intended behavior: it isn't a blind trend-follower, it combines the macro regime with near-term technicals before committing capital.
 - **Reliability held up, with one real gap found and fixed.** Across 22 days the watchdog has caught and self-healed multiple silent outages (the arena/monitor tasks going dead after extended laptop sleep). One genuine bug did surface: the watchdog's scheduled-task action wasn't set to run hidden, so every 5-minute check flashed a visible console window — fixed by launching it through a hidden `wscript.exe` wrapper instead of PowerShell directly, with no loss of the safety net.
 
 This snapshot will go stale — it's a point-in-time read of a system that's still running. Check `/arena` for the live numbers, or ask for a fresh summary.
