@@ -1,0 +1,7 @@
+ccxt
+mplfinance
+pandas
+ta
+anthropic
+python-dotenv
+flask

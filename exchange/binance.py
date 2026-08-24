@@ -1,6 +1,13 @@
 import ccxt
 
-exchange = ccxt.binance()
+exchange = ccxt.binance(
+    {
+        "enableRateLimit": True,
+        "options": {
+            "defaultType": "spot",
+        },
+    }
+)
 
 
 def get_live_price(symbol):

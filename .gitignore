@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+btc_data.csv
+binance_1s_24h.csv
+scalping_smoke_test_events.csv
+state/

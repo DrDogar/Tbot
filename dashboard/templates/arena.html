@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TBOT Bot Arena</title>
+<style>
+  .viz-root {
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --page-plane:     #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    --series-1:       #2a78d6;
+    --series-1-soft:  rgba(42,120,214,0.14);
+    --good:           #0ca30c;
+    --critical:       #d03b3b;
+    --warning:        #fab219;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root {
+      color-scheme: dark;
+      --surface-1:      #1a1a19;
+      --page-plane:     #0d0d0d;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --gridline:       #2c2c2a;
+      --baseline:       #383835;
+      --border:         rgba(255,255,255,0.10);
+      --series-1:       #3987e5;
+      --series-1-soft:  rgba(57,135,229,0.18);
+    }
+  }
+  :root[data-theme="dark"] .viz-root {
+    color-scheme: dark;
+    --surface-1:      #1a1a19;
+    --page-plane:     #0d0d0d;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --gridline:       #2c2c2a;
+    --baseline:       #383835;
+    --border:         rgba(255,255,255,0.10);
+    --series-1:       #3987e5;
+    --series-1-soft:  rgba(57,135,229,0.18);
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--page-plane); color: var(--text-primary); }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 20px 20px 60px; }
+
+  header.top {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px;
+    padding: 16px 20px; margin-bottom: 20px;
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
+  }
+  header.top h1 { font-size: 18px; margin: 0; font-weight: 700; }
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px;
+    border: 1px solid var(--border);
+  }
+  .status-pill .dot { width: 7px; height: 7px; border-radius: 50%; }
+  .status-live .dot { background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 25%, transparent); }
+  .status-live { color: var(--good); }
+  .status-off .dot { background: var(--text-muted); }
+  .status-off { color: var(--text-muted); }
+  .status-done .dot { background: var(--series-1); }
+  .status-done { color: var(--series-1); }
+
+  .meta-row { display: flex; flex-wrap: wrap; gap: 4px 22px; color: var(--text-secondary); font-size: 13px; margin-left: auto; }
+  .meta-row b { color: var(--text-primary); font-variant-numeric: tabular-nums; }
+
+  a.nav-link { font-size: 12px; color: var(--series-1); text-decoration: none; font-weight: 600; }
+  button.theme-toggle {
+    border: 1px solid var(--border); background: transparent; color: var(--text-secondary);
+    border-radius: 8px; padding: 6px 10px; font-size: 12px; cursor: pointer;
+  }
+  button.theme-toggle:hover { color: var(--text-primary); }
+
+  .no-session { color: var(--text-muted); font-size: 13px; padding: 30px 0; text-align: center; }
+
+  .ticker { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 20px; }
+  .ticker .tick {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 14px; display: flex; flex-direction: column; gap: 2px;
+  }
+  .ticker .tick .symbol { font-size: 12px; color: var(--text-muted); font-weight: 600; }
+  .ticker .tick .price { font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; transition: color .3s; }
+  .ticker .tick .price.up { color: var(--good); }
+  .ticker .tick .price.down { color: var(--critical); }
+
+  .leaderboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .bot-card {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 16px; cursor: pointer; transition: border-color .15s;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .bot-card:hover { border-color: var(--series-1); }
+  .bot-card.selected { border-color: var(--series-1); box-shadow: 0 0 0 2px color-mix(in srgb, var(--series-1) 30%, transparent); }
+  .bot-card .rank { font-size: 11px; color: var(--text-muted); font-weight: 700; }
+  .bot-card .name { font-size: 15px; font-weight: 700; }
+  .bot-card .desc { font-size: 11px; color: var(--text-secondary); line-height: 1.4; min-height: 30px; }
+  .bot-card .equity { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .bot-card .delta { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .bot-card .stats { font-size: 11px; color: var(--text-muted); display: flex; justify-content: space-between; }
+  .delta.up { color: var(--good); }
+  .delta.down { color: var(--critical); }
+  .delta.flat { color: var(--text-muted); }
+
+  .card {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 18px; margin-bottom: 20px;
+  }
+  .card h2 { font-size: 14px; margin: 0 0 4px; }
+  .card .subtitle { font-size: 12px; color: var(--text-secondary); margin-bottom: 12px; }
+  .risk-tags { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .risk-tag { font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: var(--page-plane); border: 1px solid var(--border); color: var(--text-secondary); }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 16px; }
+  .tile { background: var(--page-plane); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+  .tile .label { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+  .tile .value { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  .chart-empty, .no-trades { color: var(--text-muted); font-size: 13px; padding: 24px 0; text-align: center; }
+  #arena-tooltip {
+    position: absolute; pointer-events: none; display: none;
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
+    padding: 6px 10px; font-size: 12px; color: var(--text-primary); box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+    font-variant-numeric: tabular-nums;
+  }
+  .chart-wrap { position: relative; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--gridline); white-space: nowrap; }
+  th { color: var(--text-muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; }
+  td { font-variant-numeric: tabular-nums; }
+  td.reason { white-space: normal; color: var(--text-secondary); font-variant-numeric: normal; min-width: 200px; }
+  .table-scroll { overflow-x: auto; }
+
+  .badge { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+  .badge-buy { color: var(--good); background: color-mix(in srgb, var(--good) 14%, transparent); }
+  .badge-sell { color: var(--critical); background: color-mix(in srgb, var(--critical) 14%, transparent); }
+  .badge-hold { color: var(--text-muted); background: color-mix(in srgb, var(--text-muted) 14%, transparent); }
+  .badge-pending { color: var(--text-muted); }
+
+  .log-box {
+    background: var(--page-plane); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 12px; font-family: ui-monospace, "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+    font-size: 12px; line-height: 1.6; color: var(--text-secondary); max-height: 260px; overflow-y: auto;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .log-box .line:last-child { color: var(--text-primary); }
+</style>
+</head>
+<body>
+<div class="viz-root">
+  <div class="wrap">
+    <header class="top">
+      <h1>TBOT Bot Arena</h1>
+      <span id="status-pill" class="status-pill status-off"><span class="dot"></span><span id="status-text">Loading…</span></span>
+      <div class="meta-row">
+        <span>Run <b id="run-id">—</b></span>
+        <span>Cycle <b id="cycle">—</b></span>
+        <span>Remaining <b id="remaining">—</b></span>
+        <span>Updated <b id="updated">—</b></span>
+      </div>
+      <a class="nav-link" href="/">← Single-Bot Monitor</a>
+      <button class="theme-toggle" id="theme-toggle" type="button">Toggle theme</button>
+    </header>
+
+    <div id="no-session" class="no-session card" style="display:none;">
+      No arena session found yet. Start it with <code>python run_arena.py</code> or menu option 12 — this page will pick it up automatically.
+    </div>
+
+    <div id="content" style="display:none;">
+      <div class="ticker" id="ticker"></div>
+      <div class="leaderboard" id="leaderboard"></div>
+
+      <div class="card">
+        <h2 id="detail-name">—</h2>
+        <div class="subtitle" id="detail-desc">—</div>
+        <div class="risk-tags" id="detail-risk"></div>
+
+        <div class="tiles">
+          <div class="tile"><div class="label">Equity</div><div class="value" id="d-equity">—</div></div>
+          <div class="tile"><div class="label">PnL</div><div class="value" id="d-pnl">—</div></div>
+          <div class="tile"><div class="label">Cash</div><div class="value" id="d-cash">—</div></div>
+          <div class="tile"><div class="label">Open Positions</div><div class="value" id="d-openpos">—</div></div>
+          <div class="tile"><div class="label">Fees Paid</div><div class="value" id="d-fees">—</div></div>
+          <div class="tile"><div class="label">Trades</div><div class="value" id="d-trades">—</div></div>
+        </div>
+
+        <div class="chart-wrap">
+          <svg id="equity-chart" width="100%" viewBox="0 0 760 200" preserveAspectRatio="none"></svg>
+          <div id="arena-tooltip"></div>
+        </div>
+        <div id="equity-empty" class="chart-empty" style="display:none;">Not enough data yet for a chart.</div>
+      </div>
+
+      <div class="card">
+        <h2>Coins &amp; Weekly Training</h2>
+        <div class="table-scroll">
+          <table>
+            <thead><tr>
+              <th>Symbol</th><th>Price</th><th>7d Δ</th><th>Position</th><th>Unrealized PnL</th>
+              <th>Last Action</th><th class="reason">Reason</th><th>Training (7d backtest)</th>
+            </tr></thead>
+            <tbody id="coins-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Recent Trades</h2>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Time (UTC)</th><th>Symbol</th><th>Side</th><th>Price</th><th>Quote Amt</th><th>Fee</th><th class="reason">Reason</th></tr></thead>
+            <tbody id="trades-body"></tbody>
+          </table>
+        </div>
+        <div id="trades-empty" class="no-trades" style="display:none;">No trades executed yet.</div>
+      </div>
+
+      <div class="card">
+        <h2>Shared Activity Log</h2>
+        <div class="log-box" id="log-box"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const REFRESH_MS = {{ refresh_seconds }} * 1000;
+const root = document.documentElement;
+const savedTheme = localStorage.getItem('tbot-theme');
+if (savedTheme) root.setAttribute('data-theme', savedTheme);
+
+document.getElementById('theme-toggle').addEventListener('click', () => {
+  const current = root.getAttribute('data-theme') ||
+    (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  const next = current === 'dark' ? 'light' : 'dark';
+  root.setAttribute('data-theme', next);
+  localStorage.setItem('tbot-theme', next);
+});
+
+function fmtUsd(v) {
+  const n = Number(v);
+  const sign = n < 0 ? '-' : '';
+  return sign + '$' + Math.abs(n).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+function fmtPct(v) {
+  const n = Number(v);
+  return (n > 0 ? '+' : '') + n.toFixed(2) + '%';
+}
+function fmtTime(iso) {
+  if (!iso) return '—';
+  return iso.replace('T', ' ').split('.')[0].split('+')[0];
+}
+function deltaClass(v) {
+  if (v > 0.0001) return 'up';
+  if (v < -0.0001) return 'down';
+  return 'flat';
+}
+function actionBadge(action) {
+  if (action === 'BUY') return '<span class="badge badge-buy">▲ BUY</span>';
+  if (action === 'SELL') return '<span class="badge badge-sell">▼ SELL</span>';
+  if (action === 'HOLD') return '<span class="badge badge-hold">– HOLD</span>';
+  return '<span class="badge badge-pending">pending</span>';
+}
+
+let arenaData = null;
+let selectedBotKey = null;
+let previousPrices = {};
+
+function renderTicker(livePrices) {
+  const container = document.getElementById('ticker');
+
+  container.innerHTML = Object.entries(livePrices || {}).map(([symbol, price]) => {
+    if (price == null) {
+      return `<div class="tick"><div class="symbol">${symbol}</div><div class="price">—</div></div>`;
+    }
+
+    const prev = previousPrices[symbol];
+    let cls = '';
+    if (prev != null) {
+      if (price > prev) cls = 'up';
+      else if (price < prev) cls = 'down';
+    }
+    previousPrices[symbol] = price;
+
+    return `<div class="tick"><div class="symbol">${symbol}</div><div class="price ${cls}">${fmtUsd(price)}</div></div>`;
+  }).join('');
+}
+
+function selectBot(key) {
+  selectedBotKey = key;
+  renderDetail();
+}
+
+function renderLeaderboard() {
+  const bots = arenaData.bots.slice().sort((a, b) => b.pnl_pct - a.pnl_pct);
+  document.getElementById('leaderboard').innerHTML = bots.map((bot, i) => `
+    <div class="bot-card ${bot.key === selectedBotKey ? 'selected' : ''}" onclick="selectBot('${bot.key}')">
+      <div class="rank">#${i + 1}</div>
+      <div class="name">${bot.name}</div>
+      <div class="desc">${bot.description}</div>
+      <div class="equity">${fmtUsd(bot.equity)}</div>
+      <div class="delta ${deltaClass(bot.pnl_pct)}">${fmtUsd(bot.pnl)} (${fmtPct(bot.pnl_pct)})</div>
+      <div class="stats"><span>${bot.trade_count} trades</span><span>fees ${fmtUsd(bot.total_fees_paid)}</span></div>
+    </div>
+  `).join('');
+}
+
+function renderDetail() {
+  const bot = arenaData.bots.find(b => b.key === selectedBotKey);
+  if (!bot) return;
+
+  document.getElementById('detail-name').textContent = bot.name;
+  document.getElementById('detail-desc').textContent = bot.description;
+
+  const riskTags = [`Stop-loss ${bot.stop_loss_pct}%`];
+  if (bot.take_profit_pct) riskTags.push(`Take-profit ${bot.take_profit_pct}%`);
+  if (bot.trailing_stop_pct) riskTags.push(`Trailing stop ${bot.trailing_stop_pct}%`);
+  document.getElementById('detail-risk').innerHTML = riskTags.map(t => `<span class="risk-tag">${t}</span>`).join('');
+
+  document.getElementById('d-equity').textContent = fmtUsd(bot.equity);
+  const pnlEl = document.getElementById('d-pnl');
+  pnlEl.textContent = fmtUsd(bot.pnl) + ' (' + fmtPct(bot.pnl_pct) + ')';
+  pnlEl.className = 'value ' + deltaClass(bot.pnl_pct);
+  document.getElementById('d-cash').textContent = fmtUsd(bot.cash);
+  document.getElementById('d-openpos').textContent = fmtUsd(bot.market_value);
+  document.getElementById('d-fees').textContent = fmtUsd(bot.total_fees_paid);
+  document.getElementById('d-trades').textContent = bot.trade_count;
+
+  renderEquityChart(bot.equity_history);
+
+  document.getElementById('coins-body').innerHTML = bot.coins.map(c => {
+    const holding = c.base_amount > 0;
+    const t = c.training;
+    const trainingText = t ? `${t.trades} trades, ${Math.round(t.win_rate * 100)}% win, ${t.total_return_pct >= 0 ? '+' : ''}${t.total_return_pct.toFixed(2)}%` : 'untested';
+    return `<tr>
+      <td><b>${c.symbol}</b></td>
+      <td>${c.price ? fmtUsd(c.price) : '—'}</td>
+      <td class="${c.week_change_pct != null ? deltaClass(c.week_change_pct) : ''}">${c.week_change_pct != null ? fmtPct(c.week_change_pct) : '—'}</td>
+      <td>${holding ? c.base_amount.toFixed(6) : '—'}</td>
+      <td class="${deltaClass(c.unrealized_pnl)}">${holding ? fmtUsd(c.unrealized_pnl) : '—'}</td>
+      <td>${actionBadge(c.action)}</td>
+      <td class="reason" title="${c.reason || ''}">${c.reason ? (c.reason.length > 60 ? c.reason.slice(0, 60) + '…' : c.reason) : '—'}</td>
+      <td class="${t && t.total_return_pct < 0 ? 'down' : (t && t.total_return_pct > 0 ? 'up' : '')}">${trainingText}</td>
+    </tr>`;
+  }).join('');
+
+  const trades = bot.recent_trades || [];
+  document.getElementById('trades-empty').style.display = trades.length ? 'none' : 'block';
+  document.getElementById('trades-body').innerHTML = trades.map(t => `<tr>
+    <td>${fmtTime(t.timestamp)}</td>
+    <td><b>${t.symbol}</b></td>
+    <td>${actionBadge(t.side)}</td>
+    <td>${fmtUsd(t.price)}</td>
+    <td>${fmtUsd(t.quote_amount)}</td>
+    <td>${fmtUsd(t.fee_quote)}</td>
+    <td class="reason" title="${t.reasoning || ''}">${t.reasoning || '—'}</td>
+  </tr>`).join('');
+}
+
+function renderEquityChart(history) {
+  const svg = document.getElementById('equity-chart');
+  const empty = document.getElementById('equity-empty');
+
+  if (!history || history.length < 2) {
+    svg.style.display = 'none';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+  svg.style.display = 'block';
+
+  const width = 760, height = 200, padL = 60, padR = 16, padT = 16, padB = 26;
+  const values = history.map(r => parseFloat(r.equity));
+  const startValue = parseFloat(history[0].cash) + parseFloat(history[0].market_value || 0);
+  const minV = Math.min(...values, startValue);
+  const maxV = Math.max(...values, startValue);
+  const span = (maxV - minV) || 1;
+  const pad = span * 0.08;
+  const lo = minV - pad, hi = maxV + pad, fullSpan = (hi - lo) || 1;
+
+  const x = i => padL + (i / (history.length - 1)) * (width - padL - padR);
+  const y = v => padT + (1 - (v - lo) / fullSpan) * (height - padT - padB);
+
+  let linePath = '';
+  history.forEach((r, i) => { linePath += (i === 0 ? 'M' : 'L') + x(i).toFixed(1) + ',' + y(values[i]).toFixed(1) + ' '; });
+  const areaPath = linePath + `L${x(history.length - 1).toFixed(1)},${(height - padB).toFixed(1)} L${x(0).toFixed(1)},${(height - padB).toFixed(1)} Z`;
+
+  const style = getComputedStyle(document.querySelector('.viz-root'));
+  const seriesColor = style.getPropertyValue('--series-1').trim();
+  const seriesSoft = style.getPropertyValue('--series-1-soft').trim();
+  const gridColor = style.getPropertyValue('--gridline').trim();
+  const baseColor = style.getPropertyValue('--baseline').trim();
+  const mutedColor = style.getPropertyValue('--text-muted').trim();
+
+  const gridLines = [0, 0.5, 1].map(f => {
+    const v = lo + f * fullSpan;
+    const yy = y(v).toFixed(1);
+    return `<line x1="${padL}" y1="${yy}" x2="${width - padR}" y2="${yy}" stroke="${gridColor}" stroke-width="1"/>` +
+           `<text x="${padL - 8}" y="${yy}" fill="${mutedColor}" font-size="11" text-anchor="end" dominant-baseline="middle">${fmtUsd(v)}</text>`;
+  }).join('');
+
+  const startY = y(startValue).toFixed(1);
+  const startLine = `<line x1="${padL}" y1="${startY}" x2="${width - padR}" y2="${startY}" stroke="${baseColor}" stroke-width="1" stroke-dasharray="4 4"/>`;
+  const lastX = x(history.length - 1).toFixed(1);
+  const lastY = y(values[values.length - 1]).toFixed(1);
+
+  const xLabels = [0, Math.floor((history.length - 1) / 2), history.length - 1].map(i =>
+    `<text x="${x(i).toFixed(1)}" y="${height - 6}" fill="${mutedColor}" font-size="11" text-anchor="middle">${(fmtTime(history[i].timestamp).split(' ')[1] || '')}</text>`
+  ).join('');
+
+  svg.innerHTML = `
+    <defs><linearGradient id="areaFillArena" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="${seriesSoft}"/><stop offset="100%" stop-color="${seriesSoft}" stop-opacity="0"/>
+    </linearGradient></defs>
+    ${gridLines}${startLine}
+    <path d="${areaPath}" fill="url(#areaFillArena)" stroke="none"/>
+    <path d="${linePath}" fill="none" stroke="${seriesColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="${lastX}" cy="${lastY}" r="4" fill="${seriesColor}"/>
+    ${xLabels}
+    <line id="crosshair" x1="0" y1="${padT}" x2="0" y2="${height - padB}" stroke="${mutedColor}" stroke-width="1" style="display:none;"/>
+  `;
+
+  const tooltip = document.getElementById('arena-tooltip');
+  const crosshair = svg.querySelector('#crosshair');
+
+  svg.onmousemove = (evt) => {
+    const rect = svg.getBoundingClientRect();
+    const relX = ((evt.clientX - rect.left) / rect.width) * width;
+    let idx = Math.round(((relX - padL) / (width - padL - padR)) * (history.length - 1));
+    idx = Math.max(0, Math.min(history.length - 1, idx));
+    const px = x(idx);
+    crosshair.setAttribute('x1', px);
+    crosshair.setAttribute('x2', px);
+    crosshair.style.display = 'block';
+    tooltip.style.display = 'block';
+    tooltip.style.left = ((px / width) * rect.width) + 'px';
+    tooltip.style.top = '0px';
+    tooltip.innerHTML = `<div>${fmtTime(history[idx].timestamp)}</div><div><b>${fmtUsd(values[idx])}</b> (${fmtPct(parseFloat(history[idx].pnl_pct))})</div>`;
+  };
+  svg.onmouseleave = () => { crosshair.style.display = 'none'; tooltip.style.display = 'none'; };
+}
+
+async function refresh() {
+  let data;
+  try {
+    const res = await fetch('/api/arena-status');
+    data = await res.json();
+  } catch (e) { return; }
+
+  if (!data.arena_active) {
+    document.getElementById('no-session').style.display = 'block';
+    document.getElementById('content').style.display = 'none';
+    document.getElementById('status-pill').className = 'status-pill status-off';
+    document.getElementById('status-text').textContent = 'No arena';
+    return;
+  }
+
+  arenaData = data;
+  if (!selectedBotKey || !data.bots.find(b => b.key === selectedBotKey)) {
+    selectedBotKey = data.bots.slice().sort((a, b) => b.pnl_pct - a.pnl_pct)[0].key;
+  }
+
+  document.getElementById('no-session').style.display = 'none';
+  document.getElementById('content').style.display = 'block';
+
+  const s = data.session;
+  const pill = document.getElementById('status-pill');
+  if (s.completed) {
+    pill.className = 'status-pill status-done';
+    document.getElementById('status-text').textContent = 'Completed';
+  } else {
+    pill.className = 'status-pill status-live';
+    document.getElementById('status-text').textContent = 'Live';
+  }
+
+  document.getElementById('run-id').textContent = s.run_id;
+  document.getElementById('cycle').textContent = s.cycle_count;
+  const remH = Math.floor(s.remaining_seconds / 3600);
+  const remM = Math.floor((s.remaining_seconds % 3600) / 60);
+  document.getElementById('remaining').textContent = remH + 'h ' + remM + 'm';
+  document.getElementById('updated').textContent = new Date().toLocaleTimeString();
+
+  renderTicker(data.live_prices);
+  renderLeaderboard();
+  renderDetail();
+
+  const logLines = data.recent_log || [];
+  document.getElementById('log-box').innerHTML = logLines.map(l => `<div class="line">${l.replace(/</g, '&lt;')}</div>`).join('');
+  const logBox = document.getElementById('log-box');
+  logBox.scrollTop = logBox.scrollHeight;
+}
+
+refresh();
+setInterval(refresh, REFRESH_MS);
+</script>
+</body>
+</html>
