@@ -21,10 +21,18 @@ on this machine.
 ## [Unreleased]
 
 ### Fixed
-- Arena and monitor Task Scheduler entries were launching `python.exe` directly,
-  which pops a visible console window. Both now launch through a hidden
-  `wscript.exe` wrapper (`scripts/run_hidden.vbs`), same fix already applied to
-  the watchdog task. (`0fea1ba`)
+- Attempted to hide the arena/monitor console windows the same way as the
+  watchdog (hidden `wscript.exe` wrapper, `0fea1ba`) — but this actually broke
+  something worse: `Stop-ScheduledTask` only kills the wrapper's `wscript.exe`
+  process, not the `python.exe` it spawns via `Shell.Run`, which survives as an
+  orphan. A routine restart briefly ran two arenas against the same portfolio
+  files at once (caught it live: duplicate cycle numbers in `session.log`; no
+  data corruption resulted, but it was a real race). Reverted arena/monitor to
+  direct `python.exe` launch — Task Scheduler tracks that process itself, so
+  `Stop-ScheduledTask` reliably kills it. The console window is back for these
+  two (watchdog's fix is unaffected and stays, since it's short-lived enough
+  that an occasional orphan there is harmless). `scripts/run_hidden.vbs` removed
+  as dead code.
 
 ### Added
 - This changelog. (`89e9884`, `2cd97e7`)

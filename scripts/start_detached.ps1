@@ -22,7 +22,6 @@ $ErrorActionPreference = "Stop"
 
 $projectRoot = (Resolve-Path "$PSScriptRoot\..").Path
 $pythonExe = Join-Path $projectRoot ".venv\Scripts\python.exe"
-$runHiddenVbs = Join-Path $projectRoot "scripts\run_hidden.vbs"
 
 if (-not (Test-Path $pythonExe)) {
     throw "Could not find venv python at $pythonExe. Create the venv first."
@@ -38,13 +37,18 @@ function Register-DetachedTask($taskName, $scriptFile) {
     if (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) {
         Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
         Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
+        Start-Sleep -Seconds 1
     }
 
-    # Runs via a hidden wscript.exe wrapper instead of calling python.exe directly --
-    # python.exe is a console app, so Task Scheduler would otherwise pop a visible
-    # window for it (same issue the watchdog had). run_hidden.vbs waits for the
-    # process and passes its exit code through, so restart-on-failure still works.
-    $action = New-ScheduledTaskAction -Execute "wscript.exe" -Argument "`"$runHiddenVbs`" `"$scriptFile`"" -WorkingDirectory $projectRoot
+    # Deliberately NOT using the run_hidden.vbs wrapper here (unlike the watchdog):
+    # tried it, and Stop-ScheduledTask only kills the wscript.exe action process --
+    # the python.exe it spawns via Shell.Run survives as an orphan, so a restart can
+    # briefly leave two arenas writing to the same portfolio files at once (verified:
+    # duplicate cycle numbers in session.log). Direct launch means Task Scheduler
+    # tracks python.exe itself, so Stop-ScheduledTask reliably kills it -- correctness
+    # over hiding the window for these two. The window is console-only, not a popup
+    # that steals focus, and only appears while the task is (re)starting either task.
+    $action = New-ScheduledTaskAction -Execute $pythonExe -Argument "`"$scriptPath`"" -WorkingDirectory $projectRoot
     $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddSeconds(5)
     $settings = New-ScheduledTaskSettingsSet `
         -RestartCount 999 `
