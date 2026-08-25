@@ -20,6 +20,20 @@ on this machine.
 
 ## [Unreleased]
 
+Nothing pending.
+
+---
+
+## [5.3.1] — 2026-08-25 — `a71b1dc`
+
+### Added
+- This changelog, in [Keep a Changelog](https://keepachangelog.com) format.
+  (`89e9884`, `2cd97e7`, `4c612ba`)
+- `APP_VERSION` in `config/settings.py` as the single source of truth for the
+  running version; surfaced in the arena/monitor dashboard headers and the
+  arena's startup log line. (`4c612ba`)
+- Git tags for every past release, `v0.1.0` through `v5.3.0`. (`4c612ba`)
+
 ### Fixed
 - Attempted to hide the arena/monitor console windows the same way as the
   watchdog (hidden `wscript.exe` wrapper, `0fea1ba`) — but this actually broke
@@ -32,13 +46,7 @@ on this machine.
   `Stop-ScheduledTask` reliably kills it. The console window is back for these
   two (watchdog's fix is unaffected and stays, since it's short-lived enough
   that an occasional orphan there is harmless). `scripts/run_hidden.vbs` removed
-  as dead code.
-
-### Added
-- This changelog. (`89e9884`, `2cd97e7`)
-- `APP_VERSION` in `config/settings.py` as the single source of truth for the
-  running version; surfaced in the arena/monitor dashboard headers and the
-  arena's startup log line.
+  as dead code. (`a71b1dc`)
 
 ---
 
