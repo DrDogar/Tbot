@@ -20,18 +20,21 @@ on this machine.
 
 ## [Unreleased]
 
-`APP_VERSION` is `5.3.2-dev` while this section is open — the `-dev` suffix
-drops and this becomes a dated, tagged `[5.3.2]` section once actually pushed.
+Nothing pending.
+
+---
+
+## [5.3.2] — 2026-09-01 — `d1e8ba6`
 
 ### Changed
 - Watchdog check interval: 5 minutes → 30 minutes. Verified it still registers
   and runs successfully (`LastTaskResult=0`) at the new interval before leaving
-  it there.
-- `README.md` refreshed to match current reality: 5-bot roster (already
-  correct), watchdog interval, the `pythonw.exe` fix, a new Known Limitation
-  note on `LogonType: Interactive` not surviving sign-out/reboot-without-login,
-  a new Versioning section documenting this changelog/tagging scheme, and an
-  updated results snapshot (29 days, cycle 7,336).
+  it there. (`bf9067c`)
+- `README.md` refreshed to match current reality: watchdog interval, the
+  `pythonw.exe` fix, a new Known Limitation note on `LogonType: Interactive`
+  not surviving sign-out/reboot-without-login, a new Versioning section
+  documenting this changelog/tagging scheme, and an updated results snapshot
+  (29 days, cycle 7,336). (`d1e8ba6`)
 
 ### Fixed
 - Arena/monitor console windows, done properly this time: launched via
@@ -44,7 +47,7 @@ drops and this becomes a dated, tagged `[5.3.2]` section once actually pushed.
   verified beforehand, since `sys.stdout`/`sys.stderr` are `None` under
   `pythonw.exe`: the logger's console handler no-ops safely instead of
   crashing, `print()` doesn't raise, and Flask's dev server starts and serves
-  normally.
+  normally. (`bf9067c`)
 
 ---
 
