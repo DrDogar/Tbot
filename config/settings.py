@@ -10,7 +10,7 @@ from pathlib import Path
 
 # Single source of truth for the running version -- bump this alongside a new
 # CHANGELOG.md entry. See CHANGELOG.md for what changed at each version.
-APP_VERSION = "5.3.2"
+APP_VERSION = "5.3.2-dev"
 
 # ==========================================
 # CURRENT MARKET

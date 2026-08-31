@@ -35,6 +35,25 @@ For hands-off, reboot-proof operation on Windows, use `scripts/start_detached.ps
 
 ---
 
+## Versioning
+
+The running version is tracked in one place — `APP_VERSION` in `config/settings.py`
+— and shown in the arena's startup log line and as a small badge in both dashboard
+headers. It follows [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PATCH`):
+MAJOR for architecture changes, MINOR for a bot added/removed or a new capability,
+PATCH for bug fixes/reliability work/tooling.
+
+`CHANGELOG.md` documents every version in [Keep a Changelog](https://keepachangelog.com)
+format — what was Added/Changed/Fixed/Removed, with the git commit hash for each
+entry so you can `git show <hash>` for the full diff. Every released version is
+also tagged in git (`git tag -l`).
+
+Commits happen locally as changes are made; nothing reaches GitHub until
+explicitly pushed — check `CHANGELOG.md`'s `[Unreleased]` section for what's
+sitting locally versus what's actually live on the remote.
+
+---
+
 ## The bots
 
 Every bot gets a fresh **$1,000**, trades across all 5 coins, and is fully isolated from the others (one bot's error never affects another's — see `bots/engine.py`). What differs between them is **when they enter a trade** and **how tightly they manage the exit**.
@@ -92,10 +111,12 @@ This started as a laptop that "turns off on its own," so a lot of the engineerin
 
 - **Resumable by design**: state is checkpointed to `state/` after every single symbol evaluation, not just every cycle. Killing the process at any point loses at most a few seconds of work.
 - **Detached from the terminal**: the arena and monitor run as **Windows Scheduled Tasks** (`scripts/start_detached.ps1`), not as child processes of a terminal/IDE session — so closing VS Code, a terminal, or a Claude Code session doesn't kill them. (Both tasks also explicitly ignore battery-power restrictions, since this runs on a laptop.)
+- **No console windows**: both tasks launch via `pythonw.exe` (the windowless build of the Python interpreter) rather than `python.exe`, so nothing pops up on screen when they (re)start. This runs the actual script directly as the task's own action — no wrapper process involved — so Task Scheduler tracks and can kill it exactly like a normal console process.
 - **Self-healing at the process level**: `run_arena.py` and `run_monitor.py` each wrap their main loop in a crash-and-restart loop — an uncaught exception logs, waits 5 seconds, and restarts in-process rather than taking the whole task down.
-- **Self-healing at the OS level**: a third task, `TBOT-Watchdog` (`scripts/watchdog.ps1`), runs every 5 minutes and relaunches either task if it isn't in the `Running` state — the safety net for the case where the laptop's own sleep/hibernate killed both the process-level retry loop *and* Task Scheduler's built-in restart-on-failure at the same time (observed happening after long sleeps). It runs via a hidden `wscript.exe` wrapper (`scripts/watchdog_silent.vbs`) rather than invoking PowerShell directly, so the 5-minute check never flashes a visible console window.
+- **Self-healing at the OS level**: a third task, `TBOT-Watchdog` (`scripts/watchdog.ps1`), runs every 30 minutes and relaunches either task if it isn't in the `Running` state — the safety net for the case where the laptop's own sleep/hibernate killed both the process-level retry loop *and* Task Scheduler's built-in restart-on-failure at the same time (observed happening after long sleeps). It runs via a hidden `wscript.exe` wrapper (`scripts/watchdog_silent.vbs`) rather than invoking PowerShell directly, so the check never flashes a visible console window.
 - **Network-resilient training**: a failed retrain (e.g. a DNS blip fetching Binance data) is retried 3× with backoff; if it still fails, a resumed arena falls back to whatever training/weights already exist instead of crashing a session that has hours of progress.
 - **Unbounded run**: `SESSION_DURATION_HOURS` is set to 10 years (`config/settings.py`) — the arena runs continuously until manually stopped rather than auto-finalizing on a fixed schedule.
+- **Known limitation**: both tasks are registered with `LogonType: Interactive`, meaning they depend on an active Windows logon session. They survive closing any app/terminal (including this one), computer sleep, and crashes — but not an actual sign-out or a reboot nobody logs back into. Fixing that requires switching to a logon type that doesn't need an active session (e.g. storing credentials), which needs an elevated one-time setup step outside of what this project automates.
 
 ---
 
@@ -221,9 +242,9 @@ Both poll `state/*.json` and `state/*.csv` on an interval (`WEB_MONITOR_REFRESH_
 
 | File | Purpose |
 |---|---|
-| `start_detached.ps1` | Registers/starts the arena and monitor as Windows Scheduled Tasks, detached from any terminal, immune to battery-power restrictions; also (re)registers the watchdog task by calling `register_watchdog_task.ps1`. Safe to re-run any time (all three resume/reattach cleanly). |
+| `start_detached.ps1` | Registers/starts the arena and monitor as Windows Scheduled Tasks (via `pythonw.exe`, so no console window), detached from any terminal, immune to battery-power restrictions; also (re)registers the watchdog task by calling `register_watchdog_task.ps1`. Safe to re-run any time (all three resume/reattach cleanly). |
 | `register_watchdog_task.ps1` | Registers the `TBOT-Watchdog` task on its own (silent, hidden-window) definition — the single source of truth for it, so `start_detached.ps1` doesn't carry its own separate/divergent copy. |
-| `watchdog.ps1` | The actual check: every 5 minutes, relaunches the arena/monitor tasks if either isn't `Running` — the safety net for extended sleep/hibernate. |
+| `watchdog.ps1` | The actual check: every 30 minutes, relaunches the arena/monitor tasks if either isn't `Running` — the safety net for extended sleep/hibernate. |
 | `watchdog_silent.vbs` | Launches `watchdog.ps1` with a fully hidden window (`wscript.exe`, style 0) instead of the console flash a direct PowerShell scheduled-task action gives. |
 | `register_autostart_task.ps1` | An older, simpler "run at logon" task for the single-strategy session (`run_session.py`). Superseded by `start_detached.ps1` for the arena. |
 
@@ -246,14 +267,14 @@ TBOT grew from a single-strategy bot into a 5-bot arena, and both still work:
 
 ## Results to date
 
-**As of 2026-08-25** — the arena has been running continuously (with a couple of brief, self-healed interruptions) since **2026-08-02**, roughly **22 days**, cycle **5,308**. $1,000 starting balance per bot, all figures paper-trading only. The roster was trimmed from 7 to 5 bots on this date (see below), so this table is a fresh start for tracking the current lineup, not a continuation of the 7-bot numbers.
+**As of 2026-08-31** — the overall session has been running continuously (with a handful of brief, self-healed interruptions) since **2026-08-02**, roughly **29 days**, cycle **7,336**. The current 5-bot lineup has been in place since **2026-08-25**. $1,000 starting balance per bot, all figures paper-trading only.
 
 | Rank | Bot | Equity | P&L | Trades | Fees paid | Realized P&L |
 |---|---|---|---|---|---|---|
-| 1 | 🤖 Random Forest Trader | $1,176.09 | **+17.61%** | 285 | $55.01 | $211.68 |
-| 2 | 🤖 Neural Net Trader | $1,171.32 | **+17.13%** | 292 | $58.42 | $220.23 |
-| 3 | Breakout Hunter | $1,140.85 | **+14.08%** | 123 | $33.37 | $168.01 |
-| 4 | 🤖🤖 Ensemble Meta-Trader | $1,116.60 | **+11.66%** | 117 | $21.34 | $137.24 |
+| 1 | 🤖 Random Forest Trader | $1,175.01 | **+17.50%** | 335 | $65.04 | $235.49 |
+| 2 | 🤖 Neural Net Trader | $1,169.50 | **+16.95%** | 336 | $67.24 | $239.37 |
+| 3 | Breakout Hunter | $1,144.00 | **+14.40%** | 124 | $33.77 | $172.33 |
+| 4 | 🤖🤖 Ensemble Meta-Trader | $1,106.15 | **+10.61%** | 159 | $29.76 | $155.82 |
 | 5 | 🤖🤖🤖 Patient Trend AI | $1,000.00 | 0.00% | 0 | $0.00 | $0.00 |
 
 Market context: BTC ran from ~$63,000 to ~$79,000 over the period (+~25%), with a rough patch in the first week (down to ~$62,700) before the broader rally. ETH, SOL, BNB, and XRP all moved similarly.
@@ -261,10 +282,10 @@ Market context: BTC ran from ~$63,000 to ~$79,000 over the period (+~25%), with 
 **What the data shows so far:**
 
 - **The stop-loss change mattered.** In the first week, with tight per-bot stops (0.25–0.8%), every single bot was in the red — small, ordinary volatility kept triggering stop-losses before positions could recover, and round-trip fees compounded the damage. After widening every bot's stop-loss to a uniform 10% (holding through drawdown instead of cutting fast), the surviving bots are now all solidly positive, riding the market's actual trend instead of getting shaken out of it.
-- **Both original from-scratch AI models are winning.** Neural Net Trader and Random Forest Trader — the two models trained on a full year of data — are the top two performers, and by a clear margin. They also trade the most (285–292 trades), which under the old tight-stop regime was a liability (more trades = more chances to get chopped) but under the wide-stop regime turned into an advantage (more chances to catch a real move).
-- **The selective ensemble bet is paying off differently than expected.** Ensemble Meta-Trader was designed to be more selective — and it is (117 trades vs. 285–292 for the two models it's built on) — but that selectivity has so far cost it upside in a strongly trending market, landing it 4th rather than 1st. It's still clearly profitable and pays the least in fees per dollar earned of the three original AI bots, which may matter more in a choppier market than this one has mostly been.
+- **Both original from-scratch AI models are winning.** Neural Net Trader and Random Forest Trader — the two models trained on a full year of data — are the top two performers, and by a clear margin. They also trade the most (335–336 trades), which under the old tight-stop regime was a liability (more trades = more chances to get chopped) but under the wide-stop regime turned into an advantage (more chances to catch a real move).
+- **The selective ensemble bet is paying off differently than expected.** Ensemble Meta-Trader was designed to be more selective — and it is (159 trades vs. 335–336 for the two models it's built on) — but that selectivity has so far cost it upside in a strongly trending market, landing it 4th rather than 1st. It's still clearly profitable and pays the least in fees per dollar earned of the three original AI bots, which may matter more in a choppier market than this one has mostly been.
 - **The roster has been trimmed twice (both 2026-08-25).** First, Scalper and Aggressive Multi-Vote were retired — the only two bots never clearly profitable, both high-frequency/tight-take-profit designs that kept exiting winners early even after the stop-loss widening helped everyone else. Then Momentum Rider and Weekly Trend Follower were cut too, this time by choice rather than results (both were solidly profitable, +9.6% and +6.8%), to bring the arena down to a focused 5-bot lineup. All open positions were liquidated at the live price before each removal; full history stays on disk.
-- **Patient Trend AI just joined — no track record yet.** It's the most deliberately selective bot by design: trained on a 2-day-ahead target (vs. a few hours for the other AI bots) plus an extra 30-day macro regime feature, specifically so it can sit out chop/down-drift and only commit to a real, sustained trend. Getting that target to actually learn (rather than collapsing to always-HOLD) took real tuning — more model capacity and a carefully chosen horizon/threshold, verified against real data before going live. Its first live prediction across the 5 coins was mixed (HOLD on some, SELL on others) despite the broad uptrend, which is the intended behavior: it isn't a blind trend-follower, it combines the macro regime with near-term technicals before committing capital.
-- **Reliability held up, with one real gap found and fixed.** Across 22 days the watchdog has caught and self-healed multiple silent outages (the arena/monitor tasks going dead after extended laptop sleep). One genuine bug did surface: the watchdog's scheduled-task action wasn't set to run hidden, so every 5-minute check flashed a visible console window — fixed by launching it through a hidden `wscript.exe` wrapper instead of PowerShell directly, with no loss of the safety net.
+- **Patient Trend AI still hasn't traded, 6+ days in.** It's the most deliberately selective bot by design: trained on a 2-day-ahead target (vs. a few hours for the other AI bots) plus an extra 30-day macro regime feature, specifically so it can sit out chop/down-drift and only commit to a real, sustained trend. Getting that target to actually learn (rather than collapsing to always-HOLD) took real tuning — more model capacity and a carefully chosen horizon/threshold, verified against real data before going live. It's been consistently predicting HOLD or SELL across all 5 coins despite the broad uptrend — a legitimate outcome of combining the macro regime with near-term technicals rather than blindly following the trend, but a full week of total silence is long enough to start asking whether the bar it requires is simply too high to ever clear in practice, versus correctly disciplined patience. Still watching.
+- **Reliability held up, with real gaps found and fixed along the way.** The watchdog has repeatedly caught and self-healed silent outages (the arena/monitor tasks going dead after extended laptop sleep). Two real bugs surfaced and got fixed: the watchdog's own scheduled-task action wasn't set to run hidden, flashing a visible console every check; and a first attempt to hide the arena/monitor windows the same way (a `wscript.exe` wrapper) broke `Stop-ScheduledTask`'s ability to actually kill the process, briefly running two arenas against the same portfolio files at once during a restart (caught immediately, no data corruption, but a real race). Both are now fixed properly: watchdog runs hidden via a verified-safe wrapper, and arena/monitor run via `pythonw.exe` directly (no wrapper needed, so kill semantics stay intact) — full story in `CHANGELOG.md`.
 
 This snapshot will go stale — it's a point-in-time read of a system that's still running. Check `/arena` for the live numbers, or ask for a fresh summary.
