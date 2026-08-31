@@ -1,10 +1,10 @@
-# Registers/re-registers the TBOT-Watchdog scheduled task: checks every 5 minutes
+# Registers/re-registers the TBOT-Watchdog scheduled task: checks every 30 minutes
 # whether TBOT-Arena / TBOT-Monitor are running and relaunches either if not (see
 # watchdog.ps1 for why this exists -- Task Scheduler's own restart-on-failure doesn't
 # reliably recover both tasks after this laptop's extended sleep/hibernate).
 #
 # Runs via watchdog_silent.vbs (wscript.exe, window style 0) instead of invoking
-# powershell.exe directly, so it never flashes a visible console every 5 minutes.
+# powershell.exe directly, so it never flashes a visible console every 30 minutes.
 #
 # Safe to re-run any time -- it stops+re-registers the task, then starts it.
 #
@@ -27,7 +27,7 @@ if (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) {
 
 $action = New-ScheduledTaskAction -Execute "wscript.exe" -Argument "`"$vbsPath`""
 $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) `
-    -RepetitionInterval (New-TimeSpan -Minutes 5) -RepetitionDuration (New-TimeSpan -Days 3650)
+    -RepetitionInterval (New-TimeSpan -Minutes 30) -RepetitionDuration (New-TimeSpan -Days 3650)
 $settings = New-ScheduledTaskSettingsSet `
     -StartWhenAvailable `
     -DontStopOnIdleEnd `
@@ -40,4 +40,4 @@ $settings = New-ScheduledTaskSettingsSet `
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings `
     -Description "Every 5 minutes, silently relaunches TBOT-Arena/TBOT-Monitor if either isn't running. No visible window (runs via wscript.exe hidden)." | Out-Null
 
-Write-Host "Registered and started '$taskName' (silent -- checks every 5 minutes, no visible window)."
+Write-Host "Registered and started '$taskName' (silent -- checks every 30 minutes, no visible window)."

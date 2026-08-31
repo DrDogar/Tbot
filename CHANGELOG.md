@@ -20,7 +20,23 @@ on this machine.
 
 ## [Unreleased]
 
-Nothing pending.
+### Changed
+- Watchdog check interval: 5 minutes → 30 minutes. Verified it still registers
+  and runs successfully (`LastTaskResult=0`) at the new interval before leaving
+  it there.
+
+### Fixed
+- Arena/monitor console windows, done properly this time: launched via
+  `pythonw.exe` (the windowless build of the interpreter) as the task's direct
+  action, instead of `python.exe` or the earlier `wscript.exe` wrapper that
+  broke `Stop-ScheduledTask`. `pythonw.exe` never allocates a console at all —
+  no wrapper needed, so Task Scheduler tracks it exactly like `python.exe` and
+  kill semantics are identical (re-verified explicitly: `Stop-ScheduledTask` →
+  0 processes, on both a throwaway test task and the live arena task). Also
+  verified beforehand, since `sys.stdout`/`sys.stderr` are `None` under
+  `pythonw.exe`: the logger's console handler no-ops safely instead of
+  crashing, `print()` doesn't raise, and Flask's dev server starts and serves
+  normally.
 
 ---
 

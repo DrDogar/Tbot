@@ -21,10 +21,10 @@
 $ErrorActionPreference = "Stop"
 
 $projectRoot = (Resolve-Path "$PSScriptRoot\..").Path
-$pythonExe = Join-Path $projectRoot ".venv\Scripts\python.exe"
+$pythonwExe = Join-Path $projectRoot ".venv\Scripts\pythonw.exe"
 
-if (-not (Test-Path $pythonExe)) {
-    throw "Could not find venv python at $pythonExe. Create the venv first."
+if (-not (Test-Path $pythonwExe)) {
+    throw "Could not find venv pythonw at $pythonwExe. Create the venv first."
 }
 
 function Register-DetachedTask($taskName, $scriptFile) {
@@ -40,15 +40,20 @@ function Register-DetachedTask($taskName, $scriptFile) {
         Start-Sleep -Seconds 1
     }
 
-    # Deliberately NOT using the run_hidden.vbs wrapper here (unlike the watchdog):
-    # tried it, and Stop-ScheduledTask only kills the wscript.exe action process --
-    # the python.exe it spawns via Shell.Run survives as an orphan, so a restart can
-    # briefly leave two arenas writing to the same portfolio files at once (verified:
-    # duplicate cycle numbers in session.log). Direct launch means Task Scheduler
-    # tracks python.exe itself, so Stop-ScheduledTask reliably kills it -- correctness
-    # over hiding the window for these two. The window is console-only, not a popup
-    # that steals focus, and only appears while the task is (re)starting either task.
-    $action = New-ScheduledTaskAction -Execute $pythonExe -Argument "`"$scriptPath`"" -WorkingDirectory $projectRoot
+    # Uses pythonw.exe (the windowless build of the interpreter), launched directly
+    # as the task's own action -- not the run_hidden.vbs/wscript.exe wrapper tried
+    # earlier, which broke Stop-ScheduledTask's ability to kill the real process (it
+    # only killed the wrapper, leaving python.exe orphaned; verified two arenas ran
+    # against the same portfolio files at once because of it). pythonw.exe never
+    # allocates a console at all, so there's no window to hide, and Task Scheduler
+    # tracks it as its own direct child exactly like python.exe -- Stop-ScheduledTask
+    # kill semantics verified identical (tested standalone, and with a throwaway
+    # Flask instance under Task Scheduler, before rolling this out here). The only
+    # difference at the code level: sys.stdout/stderr are None under pythonw.exe --
+    # verified both logging (file handler works, console handler no-ops safely) and
+    # print() (also a safe no-op) tolerate that; nothing in these two scripts writes
+    # to a console in a way that assumes it exists.
+    $action = New-ScheduledTaskAction -Execute $pythonwExe -Argument "`"$scriptPath`"" -WorkingDirectory $projectRoot
     $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddSeconds(5)
     $settings = New-ScheduledTaskSettingsSet `
         -RestartCount 999 `
@@ -74,7 +79,7 @@ Register-DetachedTask "TBOT-Monitor" "run_monitor.py"
 # tasks above back after this laptop does an extended sleep/hibernate (observed one
 # sitting dead for over a day after a ~25h sleep with no auto-recovery). Registration
 # lives in its own script (runs the check via a hidden wscript.exe wrapper -- no visible
-# console window every 5 minutes) so there's exactly one place that defines it.
+# console window every check) so there's exactly one place that defines it.
 & (Join-Path $projectRoot "scripts\register_watchdog_task.ps1")
 
 Write-Host ""
